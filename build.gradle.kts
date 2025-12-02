@@ -85,9 +85,9 @@ dependencies {
         minecraftLibraries(it)
         implementation(it)
         include(it)
-        minecraftLibraries("org.apfloat:apfloat:1.10.1")
+        minecraftLibraries("org.apfloat:apfloat:1.15.0")
         minecraftLibraries("org.jheaps:jheaps:0.14")
-        include("org.apfloat:apfloat:1.10.1")
+        include("org.apfloat:apfloat:1.15.0")
         include("org.jheaps:jheaps:0.14")
     }
 }
