@@ -5,7 +5,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder
 import it.unimi.dsi.fastutil.Hash.Strategy
 import it.unimi.dsi.fastutil.objects.Object2IntOpenCustomHashMap
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenCustomHashMap
-import net.minecraft.core.Registry
+import net.minecraft.core.registries.Registries
 import net.minecraft.resources.ResourceKey
 import net.minecraft.resources.ResourceLocation
 import net.minecraft.sounds.SoundEvent
@@ -61,8 +61,8 @@ data class RecipeRuleGenerator(
     companion object {
         val CODEC = RecordCodecBuilder.create<RecipeRuleGenerator> { instance ->
             instance.group(
-                ResourceKey.codec(Registry.RECIPE_TYPE_REGISTRY).fieldOf("recipe_type").forGetter { it.recipeType },
-                SoundEvent.CODEC.fieldOf("sound").forGetter { it.sound },
+                ResourceKey.codec(Registries.RECIPE_TYPE).fieldOf("recipe_type").forGetter { it.recipeType },
+                ForgeRegistries.SOUND_EVENTS.codec.fieldOf("sound").forGetter { it.sound },
                 Codec.FLOAT.fieldOf("pitch").forGetter { it.pitch },
                 Codec.FLOAT.fieldOf("volume").forGetter { it.volume }
             ).apply(instance, ::RecipeRuleGenerator)
@@ -98,7 +98,7 @@ data class RecipeRuleGenerator(
             }
             val ingredient = recipe.ingredients.single()
             return@flatMap ingredient.items.map {
-                it.apply { it.count = ingredientCounter.getValue(ingredient) * it.count } to recipe.resultItem
+                it.apply { it.count = ingredientCounter.getValue(ingredient) * it.count } to recipe.getResultItem(level.registryAccess())
             }
         }
         val predicatesToOutputs =

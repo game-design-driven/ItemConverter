@@ -23,7 +23,7 @@ object MoreCodecs {
         try {
             DataResult.success(ItemPredicate.fromJson(it))
         } catch (e: Exception) {
-            DataResult.error(e.message)
+            DataResult.error { e.message ?: "Unknown error" }
         }
     })
 
@@ -38,7 +38,7 @@ object MoreCodecs {
                 val value = value.invoke()
                 decoder.invoke(value, it)
                 DataResult.success(value)
-            } else DataResult.error("Require compound tag")
+            } else DataResult.error { "Require compound tag" }
         })
 
     fun <T> gsonCodec(encoder: (T) -> JsonElement, decoder: (JsonElement) -> DataResult<T>) =

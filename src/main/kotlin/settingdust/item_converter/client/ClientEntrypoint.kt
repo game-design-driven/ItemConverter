@@ -15,6 +15,6 @@ object ItemConverterClient {
 
     @SubscribeEvent
     fun onClientPlayerNetwork(event: ClientPlayerNetworkEvent.LoggingIn) {
-        refreshGraph(event.player.level.registryAccess())
+        refreshGraph(event.player.level().registryAccess())
     }
 }

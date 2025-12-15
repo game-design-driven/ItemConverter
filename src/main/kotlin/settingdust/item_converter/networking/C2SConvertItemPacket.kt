@@ -21,7 +21,7 @@ data class C2SConvertItemPacket(val slot: Int, val target: ItemStack, val mode: 
             instance.group(
                 Codec.INT.fieldOf("slot").forGetter { it.slot },
                 MoreCodecs.ITEM_STACK.fieldOf("target").forGetter { it.target },
-                StringRepresentable.fromEnum { Mode.values() }.fieldOf("mode").forGetter { it.mode }
+                StringRepresentable.fromEnum { Mode.entries.toTypedArray() }.fieldOf("mode").forGetter { it.mode }
             ).apply(instance, ::C2SConvertItemPacket)
         }
 

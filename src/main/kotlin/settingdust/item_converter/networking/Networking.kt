@@ -1,5 +1,6 @@
 package settingdust.item_converter.networking
 
+import net.minecraft.nbt.NbtOps
 import net.minecraftforge.network.NetworkRegistry
 import settingdust.item_converter.ItemConverter
 
@@ -13,8 +14,8 @@ object Networking {
         channel.registerMessage(
             0,
             C2SConvertItemPacket::class.java,
-            { message, buf -> buf.writeWithCodec(C2SConvertItemPacket.CODEC, message) },
-            { it.readWithCodec(C2SConvertItemPacket.CODEC) },
+            { message, buf -> buf.writeWithCodec(NbtOps.INSTANCE, C2SConvertItemPacket.CODEC, message) },
+            { it.readWithCodec(NbtOps.INSTANCE, C2SConvertItemPacket.CODEC) },
             { packet, context -> C2SConvertItemPacket.handle(packet, context) }
         )
         channel.registerMessage(

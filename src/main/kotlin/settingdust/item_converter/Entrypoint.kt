@@ -75,12 +75,12 @@ object ItemConverter {
                                 )
                             )
                         }
-                        context.source.sendSuccess(
+                        context.source.sendSuccess({
                             Component.translatable(
                                 "command.item_converter.generate.success",
                                 exportPath
-                            ), true
-                        )
+                            )
+                        }, true)
                         result.size
                     }
                 })

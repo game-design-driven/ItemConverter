@@ -26,10 +26,10 @@ object C2SConvertTargetPacket {
             return@runCatching
         }
 
-        val level = player.level
+        val level = player.level()
         val hitResult = runBlocking(ItemConverter.serverCoroutineDispatcher!!) {
             val from = player.eyePosition
-            val to = from.add(player.getViewVector(1f).scale(player.reachDistance))
+            val to = from.add(player.getViewVector(1f).scale(player.blockReach))
             level.clip(ClipContext(from, to, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player))
         }
         if (hitResult.type != HitResult.Type.BLOCK) return@runCatching

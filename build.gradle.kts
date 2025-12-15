@@ -40,6 +40,7 @@ java {
 }
 
 repositories {
+    mavenCentral()
     unimined.curseMaven()
     unimined.modrinthMaven()
 
@@ -58,7 +59,7 @@ unimined.minecraft {
     mappings {
         searge()
         mojmap()
-        parchment(mcVersion = "1.19.4", version = "2023.06.26")
+        parchment(mcVersion = "1.20.1", version = "2023.09.03")
 
         devFallbackNamespace("searge")
     }
@@ -81,6 +82,11 @@ dependencies {
 
     implementation(catalog.kotlin.forge)
 
+    // macOS ARM native bridge for dev environment
+    if (System.getProperty("os.name").contains("Mac")) {
+        minecraftLibraries("ca.weblite:java-objc-bridge:1.1")
+    }
+
     catalog.jgrapht.let {
         minecraftLibraries(it)
         implementation(it)
@@ -90,6 +96,11 @@ dependencies {
         include("org.apfloat:apfloat:1.10.1")
         include("org.jheaps:jheaps:0.14")
     }
+
+    // KubeJS and dependencies
+    modImplementation("maven.modrinth:kubejs:2001.6.5-build.16+forge")
+    modImplementation("maven.modrinth:rhino:2001.2.3-build.6+forge")
+    modImplementation("maven.modrinth:architectury-api:9.2.14+forge")
 }
 
 kotlin {

@@ -1,10 +1,9 @@
 package settingdust.item_converter.client
 
-import com.mojang.blaze3d.vertex.PoseStack
 import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.client.gui.components.Button
-import net.minecraft.client.gui.components.Button.OnPress
-import net.minecraft.client.gui.components.Button.OnTooltip
+import net.minecraft.client.gui.components.Tooltip
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen
 import net.minecraft.network.chat.Component
@@ -15,7 +14,6 @@ import net.minecraft.world.item.BlockItem
 import net.minecraft.world.item.ItemStack
 import net.minecraftforge.api.distmarker.Dist
 import net.minecraftforge.api.distmarker.OnlyIn
-import net.minecraftforge.client.ForgeHooksClient
 import net.minecraftforge.client.event.ScreenEvent
 import net.minecraftforge.common.MinecraftForge
 import org.apache.commons.lang3.math.Fraction
@@ -23,6 +21,7 @@ import org.jgrapht.alg.shortestpath.DijkstraShortestPath
 import org.jgrapht.traverse.DepthFirstIterator
 import settingdust.item_converter.ConvertRules
 import settingdust.item_converter.DrawableNineSliceTexture
+import settingdust.item_converter.FractionUnweightedEdge
 import settingdust.item_converter.ItemConverter
 import settingdust.item_converter.SimpleItemPredicate
 import settingdust.item_converter.networking.C2SConvertItemPacket
@@ -115,10 +114,17 @@ data class ItemConvertScreen(
             val x = x + BORDER + SLOT_SIZE * (index % slotInRow)
             val y = y + BORDER + SLOT_SIZE * (index / slotInRow)
             val button = ItemButton(
-                to.predicate.copy().apply { count = ratio.numerator }, x, y, SLOT_SIZE, SLOT_SIZE,
-                OnPress {
+                screen = this,
+                item = to.predicate.copy().apply { count = ratio.numerator },
+                x = x,
+                y = y,
+                width = SLOT_SIZE,
+                height = SLOT_SIZE,
+                ratio = ratio,
+                path = path,
+                onPress = { btn ->
                     val mode = if (!hasShiftDown()) Mode.SINGLE_CLICK else Mode.SHIFT_CLICK
-                    val button = it as ItemButton
+                    val button = btn as ItemButton
                     val target = button.item.copy()
                     if (parent is CreativeModeInventoryScreen) {
                         target.popTime = 5
@@ -162,7 +168,7 @@ data class ItemConvertScreen(
 
                         for ((i, slot) in player.inventoryMenu.slots.withIndex()) {
                             if (!ItemStack.isSameItemSameTags(slot.item, button.item)) continue
-                            player.level.playSound(
+                            player.level().playSound(
                                 player,
                                 player.blockPosition(),
                                 lastEdge.sound,
@@ -181,43 +187,13 @@ data class ItemConvertScreen(
                             )
                         )
                     }
-                },
-                OnTooltip { button, pose, mouseX, mouseY ->
-                    val itemButton = button as ItemButton
-                    renderTooltip(pose, buildList {
-                        if (ratio == Fraction.ONE)
-                            add(Component.literal("${ratio.denominator}:${ratio.numerator}"))
-                        addAll(getTooltipFromItem(itemButton.item))
-                        if (Minecraft.getInstance().options.advancedItemTooltips) {
-                            add(Component.literal("Path:"))
-                            if (path.edgeList.isNotEmpty()) {
-                                val edge = path.edgeList[0]
-                                val fraction = edge.fraction
-                                val sourceVertex = ConvertRules.graph.getEdgeSource(edge)
-                                add(sourceVertex.predicate.displayName.copy().append(" x${fraction.denominator}"))
-                            }
-                            for (edges in path.edgeList.windowed(2, partialWindows = true)) {
-                                val firstEdge = edges[0]
-                                val firstFraction = firstEdge.fraction
-                                val targetVertex = ConvertRules.graph.getEdgeTarget(firstEdge)
-                                val secondComponent = Component.literal(">${firstFraction.numerator}x ")
-                                    .append(targetVertex.predicate.displayName)
-                                if (edges.size == 2) {
-                                    val secondEdge = edges[1]
-                                    val secondFraction = secondEdge.fraction
-                                    secondComponent.append(" x${secondFraction.denominator}")
-                                }
-                                add(secondComponent)
-                            }
-                        }
-                    }, itemButton.item.tooltipImage, mouseX, mouseY)
                 }
             )
             addRenderableWidget(button)
         }
     }
 
-    override fun render(poseStack: PoseStack, mouseX: Int, mouseY: Int, partialTick: Float) {
+    override fun render(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
         if (!SlotInteractManager.converting) {
             renderables.asSequence()
                 .filterIsInstance<ItemButton>()
@@ -226,13 +202,13 @@ data class ItemConvertScreen(
             onClose()
         }
         if (slot.item != input) init()
-        renderBackground(poseStack)
-        super.render(poseStack, mouseX, mouseY, partialTick)
+        renderBackground(guiGraphics)
+        super.render(guiGraphics, mouseX, mouseY, partialTick)
     }
 
-    override fun renderBackground(poseStack: PoseStack) {
-        texture.draw(poseStack, x, y, width, height)
-        MinecraftForge.EVENT_BUS.post(ScreenEvent.BackgroundRendered(this, poseStack));
+    override fun renderBackground(guiGraphics: GuiGraphics) {
+        texture.draw(guiGraphics, x, y, width, height)
+        MinecraftForge.EVENT_BUS.post(ScreenEvent.BackgroundRendered(this, guiGraphics))
     }
 
     override fun onClose() {
@@ -247,24 +223,54 @@ data class ItemConvertScreen(
 }
 
 open class ItemButton(
+    private val screen: Screen,
     val item: ItemStack,
     x: Int,
     y: Int,
     width: Int,
     height: Int,
-    onPress: OnPress,
-    onTooltip: OnTooltip
-) :
-    Button(x, y, width, height, Component.empty(), onPress, onTooltip) {
-    @Suppress("UnstableApiUsage")
-    override fun renderButton(pose: PoseStack, mouseX: Int, mouseY: Int, partialTick: Float) {
+    private val ratio: Fraction,
+    private val path: org.jgrapht.GraphPath<SimpleItemPredicate, FractionUnweightedEdge>,
+    onPress: OnPress
+) : Button(x, y, width, height, Component.empty(), onPress, DEFAULT_NARRATION) {
+
+    override fun renderWidget(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
         val minecraft = Minecraft.getInstance()
-        minecraft.itemRenderer.blitOffset = ForgeHooksClient.getGuiFarPlane() - 3000
-        minecraft.itemRenderer.renderAndDecorateItem(minecraft.player!!, item, x + 1, y + 1, 0)
+        guiGraphics.renderItem(item, x + 1, y + 1)
         if (isHoveredOrFocused) {
-            fill(pose, x + 1, y + 1, x + width - 1, y + height - 1, 0x80FFFFFF.toInt())
-            this.renderToolTip(pose, mouseX, mouseY);
+            guiGraphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0x80FFFFFF.toInt())
+            renderTooltip(guiGraphics, mouseX, mouseY)
         }
-        minecraft.itemRenderer.blitOffset = 0f
+    }
+
+    private fun renderTooltip(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int) {
+        val tooltipLines = buildList {
+            if (ratio != Fraction.ONE)
+                add(Component.literal("${ratio.denominator}:${ratio.numerator}"))
+            addAll(Screen.getTooltipFromItem(Minecraft.getInstance(), item))
+            if (Minecraft.getInstance().options.advancedItemTooltips) {
+                add(Component.literal("Path:"))
+                if (path.edgeList.isNotEmpty()) {
+                    val edge = path.edgeList[0]
+                    val fraction = edge.fraction
+                    val sourceVertex = ConvertRules.graph.getEdgeSource(edge)
+                    add(sourceVertex.predicate.displayName.copy().append(" x${fraction.denominator}"))
+                }
+                for (edges in path.edgeList.windowed(2, partialWindows = true)) {
+                    val firstEdge = edges[0]
+                    val firstFraction = firstEdge.fraction
+                    val targetVertex = ConvertRules.graph.getEdgeTarget(firstEdge)
+                    val secondComponent = Component.literal(">${firstFraction.numerator}x ")
+                        .append(targetVertex.predicate.displayName)
+                    if (edges.size == 2) {
+                        val secondEdge = edges[1]
+                        val secondFraction = secondEdge.fraction
+                        secondComponent.append(" x${secondFraction.denominator}")
+                    }
+                    add(secondComponent)
+                }
+            }
+        }
+        guiGraphics.renderTooltip(Minecraft.getInstance().font, tooltipLines, item.tooltipImage, mouseX, mouseY)
     }
 }

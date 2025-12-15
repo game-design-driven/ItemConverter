@@ -1,11 +1,10 @@
 package settingdust.item_converter.client
 
 import com.mojang.blaze3d.platform.InputConstants
-import com.mojang.blaze3d.vertex.PoseStack
 import net.minecraft.client.KeyMapping
 import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.GuiComponent
-import net.minecraft.client.gui.components.Widget
+import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.gui.components.Renderable
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import net.minecraft.resources.ResourceLocation
 import net.minecraftforge.api.distmarker.Dist
@@ -92,7 +91,7 @@ object SlotInteractManager {
                     if (hoveredSlot != null && screen.menu.carried.isEmpty && !hoveredSlot.item.isEmpty) {
                         progress.x = screen.guiLeft + hoveredSlot.x
                         progress.y = screen.guiTop + hoveredSlot.y
-                        progress.render(event.poseStack)
+                        progress.render(event.guiGraphics)
                     } else {
                         pressedTicks = 0
                     }
@@ -146,33 +145,33 @@ object SlotInteractManager {
 data class SlotInteractProgress(
     var x: Int = 0,
     var y: Int = 0
-) : GuiComponent(), Widget, IGuiOverlay {
+) : Renderable, IGuiOverlay {
     companion object {
         const val WIDTH = 16
         const val HEIGHT = 2
         const val COLOR = 0xFFF0F0F0.toInt()
     }
 
-    fun render(poseStack: PoseStack) {
+    fun render(guiGraphics: GuiGraphics) {
         if (SlotInteractManager.converting) return
         val progress =
             (SlotInteractManager.pressedTicks / ClientConfig.config.pressTicks.toFloat()).coerceIn(0f, 1f)
         val width = (WIDTH * progress).toInt()
         if (width > 0) {
-            fill(poseStack, x, y, x + width, y + HEIGHT, COLOR)
+            guiGraphics.fill(x, y, x + width, y + HEIGHT, COLOR)
         }
     }
 
     override fun render(
-        poseStack: PoseStack,
+        guiGraphics: GuiGraphics,
         mouseX: Int,
         mouseY: Int,
         partialTick: Float
-    ) = render(poseStack)
+    ) = render(guiGraphics)
 
     override fun render(
         gui: ForgeGui,
-        poseStack: PoseStack,
+        guiGraphics: GuiGraphics,
         partialTick: Float,
         screenWidth: Int,
         screenHeight: Int
@@ -183,6 +182,6 @@ data class SlotInteractProgress(
         val inventory = gui.minecraft.player!!.inventory
         x = screenWidth / 2 - 91 + inventory.selected * 20 + 3
         y = screenHeight - 22 + 3
-        render(poseStack)
+        render(guiGraphics)
     }
 }
