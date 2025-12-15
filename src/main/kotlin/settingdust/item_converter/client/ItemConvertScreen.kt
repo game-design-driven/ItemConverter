@@ -24,8 +24,10 @@ import settingdust.item_converter.DrawableNineSliceTexture
 import settingdust.item_converter.FractionUnweightedEdge
 import settingdust.item_converter.ItemConverter
 import settingdust.item_converter.SimpleItemPredicate
+import settingdust.item_converter.compat.ae2.AE2Compat
 import settingdust.item_converter.networking.C2SConvertItemPacket
 import settingdust.item_converter.networking.C2SConvertItemPacket.Mode
+import settingdust.item_converter.networking.C2SConvertMEItemPacket
 import settingdust.item_converter.networking.Networking
 
 @OnlyIn(Dist.CLIENT)
@@ -178,6 +180,14 @@ data class ItemConvertScreen(
                             )
                             minecraft!!.gameMode!!.handleCreativeModeItemAdd(slot.item, i)
                         }
+                    } else if (AE2Compat.isRepoSlot(slot)) {
+                        Networking.channel.sendToServer(
+                            C2SConvertMEItemPacket(
+                                input,
+                                target,
+                                mode
+                            )
+                        )
                     } else {
                         Networking.channel.sendToServer(
                             C2SConvertItemPacket(
@@ -197,7 +207,7 @@ data class ItemConvertScreen(
         if (!SlotInteractManager.converting) {
             renderables.asSequence()
                 .filterIsInstance<ItemButton>()
-                .firstOrNull { it.isHoveredOrFocused }
+                .firstOrNull { it.isMouseOver(mouseX.toDouble(), mouseY.toDouble()) }
                 ?.onPress()
             onClose()
         }
@@ -235,9 +245,8 @@ open class ItemButton(
 ) : Button(x, y, width, height, Component.empty(), onPress, DEFAULT_NARRATION) {
 
     override fun renderWidget(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
-        val minecraft = Minecraft.getInstance()
         guiGraphics.renderItem(item, x + 1, y + 1)
-        if (isHoveredOrFocused) {
+        if (isMouseOver(mouseX.toDouble(), mouseY.toDouble())) {
             guiGraphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0x80FFFFFF.toInt())
             renderTooltip(guiGraphics, mouseX, mouseY)
         }

@@ -37,7 +37,7 @@ dependencyResolutionManagement.versionCatalogs.create("catalog") {
     library("kotlinx-coroutines", "org.jetbrains.kotlinx", "kotlinx-coroutines-core").version("1.9.0")
 
     // https://linkie.shedaniel.dev/dependencies?loader=forge
-    version("forge", "47.3.0")
+    version("forge", "47.4.10")
     library("kotlin-forge", "thedarkcolour", "kotlinforforge").version("4.12.0")
 
     library("mixin", "org.spongepowered", "mixin").version("0.8.7")

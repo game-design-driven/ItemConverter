@@ -98,9 +98,13 @@ dependencies {
     }
 
     // KubeJS and dependencies
-    modImplementation("maven.modrinth:kubejs:2001.6.5-build.16+forge")
-    modImplementation("maven.modrinth:rhino:2001.2.3-build.6+forge")
-    modImplementation("maven.modrinth:architectury-api:9.2.14+forge")
+    modImplementation("maven.modrinth:kubejs:g5igndAv") // 2001.6.5-build.16+forge
+    modImplementation("maven.modrinth:rhino:maCpsT70") // 2001.2.3-build.6+forge
+    modImplementation("maven.modrinth:architectury-api:1MKTLiiG") // 9.2.14+forge
+
+    // Applied Energistics 2
+    modImplementation("maven.modrinth:ae2:7KVs6HMQ") // 15.4.10
+    modImplementation("maven.modrinth:guideme:9YGnKYDF") // 20.1.14 (required by AE2)
 }
 
 kotlin {
