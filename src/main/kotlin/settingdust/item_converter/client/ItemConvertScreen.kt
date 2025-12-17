@@ -32,7 +32,10 @@ import settingdust.item_converter.networking.Networking
 
 @OnlyIn(Dist.CLIENT)
 data class ItemConvertScreen(
-    val parent: Screen?, val slot: Slot
+    val parent: Screen?,
+    val slot: Slot,
+    val slotScreenX: Int? = null,
+    val slotScreenY: Int? = null
 ) : Screen(Component.translatable("gui.${ItemConverter.ID}.item_convert")) {
     companion object {
         private val TEXTURE = ItemConverter.id("textures/gui/window.png")
@@ -108,8 +111,32 @@ data class ItemConvertScreen(
         width = SLOT_SIZE * slotInRow + BORDER * 2
         height = SLOT_SIZE * slotInColumn + BORDER * 2
 
-        x = (super.width - width) / 2
-        y = (super.height - height) / 2
+        // Position window relative to slot if coordinates available
+        if (slotScreenX != null && slotScreenY != null) {
+            // Center horizontally on slot
+            x = slotScreenX + (SLOT_SIZE / 2) - (width / 2)
+            // Clamp to screen bounds horizontally
+            x = x.coerceIn(0, super.width - width)
+
+            val spaceAbove = slotScreenY
+            val spaceBelow = super.height - (slotScreenY + SLOT_SIZE)
+            val margin = 4
+
+            y = when {
+                // Prefer above if enough space
+                spaceAbove >= height + margin -> slotScreenY - height - margin
+                // Otherwise below if enough space
+                spaceBelow >= height + margin -> slotScreenY + SLOT_SIZE + margin
+                // Fallback to center
+                else -> (super.height - height) / 2
+            }
+            // Clamp to screen bounds vertically
+            y = y.coerceIn(0, super.height - height)
+        } else {
+            // Fallback to center
+            x = (super.width - width) / 2
+            y = (super.height - height) / 2
+        }
 
         for ((index, pair) in targets.withIndex()) {
             val (to, path, ratio) = pair

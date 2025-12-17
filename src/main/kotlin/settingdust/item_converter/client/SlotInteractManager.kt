@@ -105,19 +105,31 @@ object SlotInteractManager {
             if (pressedTicks > ClientConfig.config.pressTicks) {
                 if (!converting) {
                     if (screen is AbstractContainerScreen<*>) {
+                        val slot = screen.slotUnderMouse!!
+                        val slotScreenX = screen.guiLeft + slot.x
+                        val slotScreenY = screen.guiTop + slot.y
                         minecraft.pushGuiLayer(
                             ItemConvertScreen(
                                 screen,
-                                screen.slotUnderMouse!!
+                                slot,
+                                slotScreenX,
+                                slotScreenY
                             )
                         )
                         converting = true
                     } else if (screen == null) {
-                        val slotIndex = 36 + minecraft.player!!.inventory.selected
+                        val inventory = minecraft.player!!.inventory
+                        val slotIndex = 36 + inventory.selected
+                        val screenWidth = event.guiGraphics.guiWidth()
+                        val screenHeight = event.guiGraphics.guiHeight()
+                        val slotScreenX = screenWidth / 2 - 91 + inventory.selected * 20 + 3
+                        val slotScreenY = screenHeight - 22 + 3
                         minecraft.setScreen(
                             ItemConvertScreen(
                                 screen,
-                                Minecraft.getInstance().player!!.inventoryMenu.getSlot(slotIndex)
+                                Minecraft.getInstance().player!!.inventoryMenu.getSlot(slotIndex),
+                                slotScreenX,
+                                slotScreenY
                             )
                         )
                         converting = true
