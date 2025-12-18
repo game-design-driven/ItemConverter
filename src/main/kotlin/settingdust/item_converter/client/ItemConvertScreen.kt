@@ -2,6 +2,7 @@ package settingdust.item_converter.client
 
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphics
+import settingdust.item_converter.ClientConfig
 import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.components.Tooltip
 import net.minecraft.client.gui.screens.Screen
@@ -17,8 +18,6 @@ import net.minecraftforge.api.distmarker.OnlyIn
 import net.minecraftforge.client.event.ScreenEvent
 import net.minecraftforge.common.MinecraftForge
 import org.apache.commons.lang3.math.Fraction
-import org.jgrapht.alg.shortestpath.DijkstraShortestPath
-import org.jgrapht.traverse.DepthFirstIterator
 import settingdust.item_converter.ConvertRules
 import settingdust.item_converter.DrawableNineSliceTexture
 import settingdust.item_converter.FractionUnweightedEdge
@@ -29,6 +28,7 @@ import settingdust.item_converter.networking.C2SConvertItemPacket
 import settingdust.item_converter.networking.C2SConvertItemPacket.Mode
 import settingdust.item_converter.networking.C2SConvertMEItemPacket
 import settingdust.item_converter.networking.Networking
+import java.util.concurrent.ConcurrentHashMap
 
 @OnlyIn(Dist.CLIENT)
 data class ItemConvertScreen(
@@ -62,6 +62,38 @@ data class ItemConvertScreen(
             BORDER,
             BORDER
         )
+
+        // Cache: source item -> list of (target, edge, ratio) for direct conversions
+        private val conversionCache = ConcurrentHashMap<SimpleItemPredicate, List<Triple<SimpleItemPredicate, FractionUnweightedEdge, Fraction>>>()
+
+        fun clearCache() {
+            conversionCache.clear()
+        }
+
+        /** Get direct (1-hop) conversions from source - O(outgoing edges) */
+        private fun computeDirectConversions(from: SimpleItemPredicate): List<Triple<SimpleItemPredicate, FractionUnweightedEdge, Fraction>> {
+            if (from !in ConvertRules.graph.vertexSet()) return emptyList()
+
+            return ConvertRules.graph.outgoingEdgesOf(from)
+                .asSequence()
+                .map { edge ->
+                    val target = ConvertRules.graph.getEdgeTarget(edge)
+                    Triple(target, edge, edge.fraction)
+                }
+                .sortedWith(
+                    compareBy<Triple<SimpleItemPredicate, *, *>> { (to) ->
+                        val item = to.predicate.item
+                        if (item is BlockItem) item.block.javaClass.name else item.javaClass.name
+                    }.thenBy { (to) ->
+                        to.predicate.item.builtInRegistryHolder().key().location().toString().reversed()
+                    }
+                )
+                .toList()
+        }
+
+        fun getDirectConversions(from: SimpleItemPredicate): List<Triple<SimpleItemPredicate, FractionUnweightedEdge, Fraction>> {
+            return conversionCache.getOrPut(from) { computeDirectConversions(from) }
+        }
     }
 
     private var x = 0
@@ -80,26 +112,10 @@ data class ItemConvertScreen(
             onClose()
             return
         }
-        val targets =
-            DepthFirstIterator(ConvertRules.graph, from)
-                .asSequence()
-                .mapNotNull { to ->
-                    val path =
-                        DijkstraShortestPath.findPathBetween(ConvertRules.graph, from, to) ?: return@mapNotNull null
-                    if (path.vertexList.size == 1) return@mapNotNull null
-                    val ratio = path.edgeList.fold(Fraction.ONE) { acc, edge -> edge.fraction.multiplyBy(acc) }
-                    if (ratio.denominator > input.count) return@mapNotNull null
-                    return@mapNotNull Triple(to, path, ratio)
-                }
-                .toList()
-                .sortedWith(
-                    compareBy<Triple<SimpleItemPredicate, *, *>> { (to) ->
-                        val item = to.predicate.item
-                        if (item is BlockItem) item.block.javaClass.name else item.javaClass.name
-                    }.thenBy { (to) ->
-                        to.predicate.item.builtInRegistryHolder().key().location().toString().reversed()
-                    }
-                )
+
+        // Use cached direct conversions, filter by current stack count
+        val allConversions = getDirectConversions(from)
+        val targets = allConversions.filter { (_, _, ratio) -> ratio.denominator <= input.count }
 
         if (targets.isEmpty()) {
             onClose()
@@ -139,7 +155,7 @@ data class ItemConvertScreen(
         }
 
         for ((index, pair) in targets.withIndex()) {
-            val (to, path, ratio) = pair
+            val (to, edge, ratio) = pair
             val x = x + BORDER + SLOT_SIZE * (index % slotInRow)
             val y = y + BORDER + SLOT_SIZE * (index / slotInRow)
             val button = ItemButton(
@@ -150,7 +166,7 @@ data class ItemConvertScreen(
                 width = SLOT_SIZE,
                 height = SLOT_SIZE,
                 ratio = ratio,
-                path = path,
+                edge = edge,
                 onPress = { btn ->
                     val mode = if (!hasShiftDown()) Mode.SINGLE_CLICK else Mode.SHIFT_CLICK
                     val button = btn as ItemButton
@@ -193,17 +209,15 @@ data class ItemConvertScreen(
                             }
                         }
 
-                        val lastEdge = path.edgeList.last()
-
                         for ((i, slot) in player.inventoryMenu.slots.withIndex()) {
                             if (!ItemStack.isSameItemSameTags(slot.item, button.item)) continue
                             player.level().playSound(
                                 player,
                                 player.blockPosition(),
-                                lastEdge.sound,
+                                edge.sound,
                                 SoundSource.PLAYERS,
-                                (player.random.nextFloat() * 0.7F + 1.0F) * 2.0f * lastEdge.volume,
-                                lastEdge.pitch
+                                (player.random.nextFloat() * 0.7F + 1.0F) * 2.0f * edge.volume,
+                                edge.pitch
                             )
                             minecraft!!.gameMode!!.handleCreativeModeItemAdd(slot.item, i)
                         }
@@ -257,6 +271,49 @@ data class ItemConvertScreen(
     override fun isPauseScreen(): Boolean {
         return false
     }
+
+    override fun mouseScrolled(mouseX: Double, mouseY: Double, delta: Double): Boolean {
+        // When opened from hotbar (no parent), allow scrolling to change hotbar selection
+        if (parent == null) {
+            val player = minecraft?.player ?: return false
+            val inventory = player.inventory
+            inventory.selected = (inventory.selected - delta.toInt()).mod(9)
+
+            // If key still held and new item has conversions, open screen for it
+            val newItem = inventory.getItem(inventory.selected)
+            val keyDown = com.mojang.blaze3d.platform.InputConstants.isKeyDown(
+                minecraft!!.window.window,
+                SlotInteractManager.SLOT_INTERACT_KEY.key.value
+            )
+            if (keyDown && SlotInteractManager.hasConversions(newItem)) {
+                val slotIndex = 36 + inventory.selected
+                val screenWidth = minecraft!!.window.guiScaledWidth
+                val screenHeight = minecraft!!.window.guiScaledHeight
+                val slotScreenX = screenWidth / 2 - 91 + inventory.selected * 20 + 3
+                val slotScreenY = screenHeight - 22 + 3
+                minecraft!!.setScreen(
+                    ItemConvertScreen(
+                        null,
+                        player.inventoryMenu.getSlot(slotIndex),
+                        slotScreenX,
+                        slotScreenY
+                    )
+                )
+                // Restore converting flag after setScreen (onClose resets it)
+                SlotInteractManager.converting = true
+            } else if (keyDown) {
+                // Key still held but item has no conversions - close without resetting state
+                // so screen reopens immediately when scrolling to convertible item
+                minecraft!!.setScreen(null)
+                SlotInteractManager.converting = false
+                SlotInteractManager.pressedTicks = ClientConfig.config.pressTicks + 1
+            } else {
+                onClose()
+            }
+            return true
+        }
+        return super.mouseScrolled(mouseX, mouseY, delta)
+    }
 }
 
 open class ItemButton(
@@ -267,7 +324,7 @@ open class ItemButton(
     width: Int,
     height: Int,
     private val ratio: Fraction,
-    private val path: org.jgrapht.GraphPath<SimpleItemPredicate, FractionUnweightedEdge>,
+    private val edge: FractionUnweightedEdge,
     onPress: OnPress
 ) : Button(x, y, width, height, Component.empty(), onPress, DEFAULT_NARRATION) {
 
@@ -284,28 +341,6 @@ open class ItemButton(
             if (ratio != Fraction.ONE)
                 add(Component.literal("${ratio.denominator}:${ratio.numerator}"))
             addAll(Screen.getTooltipFromItem(Minecraft.getInstance(), item))
-            if (Minecraft.getInstance().options.advancedItemTooltips) {
-                add(Component.literal("Path:"))
-                if (path.edgeList.isNotEmpty()) {
-                    val edge = path.edgeList[0]
-                    val fraction = edge.fraction
-                    val sourceVertex = ConvertRules.graph.getEdgeSource(edge)
-                    add(sourceVertex.predicate.displayName.copy().append(" x${fraction.denominator}"))
-                }
-                for (edges in path.edgeList.windowed(2, partialWindows = true)) {
-                    val firstEdge = edges[0]
-                    val firstFraction = firstEdge.fraction
-                    val targetVertex = ConvertRules.graph.getEdgeTarget(firstEdge)
-                    val secondComponent = Component.literal(">${firstFraction.numerator}x ")
-                        .append(targetVertex.predicate.displayName)
-                    if (edges.size == 2) {
-                        val secondEdge = edges[1]
-                        val secondFraction = secondEdge.fraction
-                        secondComponent.append(" x${secondFraction.denominator}")
-                    }
-                    add(secondComponent)
-                }
-            }
         }
         guiGraphics.renderTooltip(Minecraft.getInstance().font, tooltipLines, item.tooltipImage, mouseX, mouseY)
     }

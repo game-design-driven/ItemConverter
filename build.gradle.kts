@@ -105,6 +105,9 @@ dependencies {
     // Applied Energistics 2
     modImplementation("maven.modrinth:ae2:7KVs6HMQ") // 15.4.10
     modImplementation("maven.modrinth:guideme:9YGnKYDF") // 20.1.14 (required by AE2)
+
+    // EMI
+    modImplementation("maven.modrinth:emi:WtJS5tVw") // 1.1.22+1.20.1+forge
 }
 
 kotlin {

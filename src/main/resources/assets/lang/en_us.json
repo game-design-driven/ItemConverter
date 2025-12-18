@@ -1,6 +1,0 @@
-{
-    "command.item_converter.generate.success": "Generated to %s",
-    "message.item_converter.no_rule": "No rule found for %s",
-    "gui.item_converter.item_convert": "Item Convert",
-    "key.item_converter.slot_interact": "Slot Convert"
-}
