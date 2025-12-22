@@ -20,13 +20,6 @@ object Networking {
         )
         channel.registerMessage(
             1,
-            C2SConvertTargetPacket::class.java,
-            { _, _ ->  },
-            { C2SConvertTargetPacket },
-            { _, context -> C2SConvertTargetPacket.handle(context) }
-        )
-        channel.registerMessage(
-            2,
             C2SConvertMEItemPacket::class.java,
             { message, buf -> buf.writeWithCodec(NbtOps.INSTANCE, C2SConvertMEItemPacket.CODEC, message) },
             { it.readWithCodec(NbtOps.INSTANCE, C2SConvertMEItemPacket.CODEC) },

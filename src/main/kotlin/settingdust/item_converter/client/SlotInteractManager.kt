@@ -20,10 +20,7 @@ import net.minecraftforge.client.gui.overlay.GuiOverlayManager
 import net.minecraftforge.client.gui.overlay.IGuiOverlay
 import net.minecraftforge.event.TickEvent
 import settingdust.item_converter.ClientConfig
-import settingdust.item_converter.ConvertRules
-import settingdust.item_converter.SimpleItemPredicate
-import settingdust.item_converter.networking.C2SConvertTargetPacket
-import settingdust.item_converter.networking.Networking
+import settingdust.item_converter.RecipeHelper
 import thedarkcolour.kotlinforforge.forge.FORGE_BUS
 import thedarkcolour.kotlinforforge.forge.MOD_BUS
 
@@ -37,11 +34,11 @@ object SlotInteractManager {
     val SLOT_INTERACT_KEY =
         KeyMapping("key.item_converter.slot_interact", InputConstants.KEY_CAPSLOCK, "key.categories.inventory")
 
-    /** Quick check if item has any possible conversions (O(1) vertex lookup) */
+    /** Quick check if item has any possible conversions */
     fun hasConversions(stack: ItemStack): Boolean {
         if (stack.isEmpty) return false
-        val predicate = SimpleItemPredicate(stack)
-        return predicate in ConvertRules.graph.vertexSet()
+        val recipeManager = RecipeHelper.getRecipeManager() ?: return false
+        return RecipeHelper.hasConversions(recipeManager, stack)
     }
 
     init {
@@ -71,22 +68,12 @@ object SlotInteractManager {
             val minecraft = Minecraft.getInstance()
             if (minecraft.player == null) return@addListener
             val screen = minecraft.screen
-            val inventory = minecraft.player!!.inventory
 
-            if (!SLOT_INTERACT_KEY.isDown) return@addListener
-
-            val itemToCheck: ItemStack? = when {
-                screen is AbstractContainerScreen<*> -> {
-                    val slot = screen.slotUnderMouse
-                    if (slot != null && screen.menu.carried.isEmpty) slot.item else null
-                }
-                screen == null -> inventory.getItem(inventory.selected)
-                else -> null
+            if (SLOT_INTERACT_KEY.isDown) {
+                // Keep incrementing while key is held, regardless of item
+                // Only check conversions when deciding to open screen
+                pressedTicks++
             }
-
-            // Keep incrementing while key is held, regardless of item
-            // Only check conversions when deciding to open screen
-            pressedTicks++
         }
 
         FORGE_BUS.addListener { event: ScreenEvent.Opening ->
@@ -169,22 +156,10 @@ object SlotInteractManager {
                 }
             }
         }
-
-        FORGE_BUS.addListener { event: InputEvent.InteractionKeyMappingTriggered ->
-            when {
-                event.isPickBlock -> {
-                    val minecraft = Minecraft.getInstance()
-                    val player = minecraft.player ?: return@addListener
-                    val sneaking = player.isCrouching
-                    if (player.abilities.instabuild && !sneaking) return@addListener
-                    event.isCanceled = true
-                    Networking.channel.sendToServer(C2SConvertTargetPacket)
-                }
-            }
-        }
     }
 }
 
+@OnlyIn(Dist.CLIENT)
 data class SlotInteractProgress(
     var x: Int = 0,
     var y: Int = 0

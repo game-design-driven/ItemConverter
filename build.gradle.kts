@@ -87,27 +87,9 @@ dependencies {
         minecraftLibraries("ca.weblite:java-objc-bridge:1.1")
     }
 
-    catalog.jgrapht.let {
-        minecraftLibraries(it)
-        implementation(it)
-        include(it)
-        minecraftLibraries("org.apfloat:apfloat:1.10.1")
-        minecraftLibraries("org.jheaps:jheaps:0.14")
-        include("org.apfloat:apfloat:1.10.1")
-        include("org.jheaps:jheaps:0.14")
-    }
-
-    // KubeJS and dependencies
-    modImplementation("maven.modrinth:kubejs:g5igndAv") // 2001.6.5-build.16+forge
-    modImplementation("maven.modrinth:rhino:maCpsT70") // 2001.2.3-build.6+forge
-    modImplementation("maven.modrinth:architectury-api:1MKTLiiG") // 9.2.14+forge
-
-    // Applied Energistics 2
+    // Applied Energistics 2 (optional compat)
     modImplementation("maven.modrinth:ae2:7KVs6HMQ") // 15.4.10
     modImplementation("maven.modrinth:guideme:9YGnKYDF") // 20.1.14 (required by AE2)
-
-    // EMI
-    modImplementation("maven.modrinth:emi:WtJS5tVw") // 1.1.22+1.20.1+forge
 }
 
 kotlin {
