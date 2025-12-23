@@ -21,6 +21,7 @@ import net.minecraftforge.client.gui.overlay.IGuiOverlay
 import net.minecraftforge.event.TickEvent
 import settingdust.item_converter.ClientConfig
 import settingdust.item_converter.RecipeHelper
+import settingdust.item_converter.compat.ae2.AE2Compat
 import thedarkcolour.kotlinforforge.forge.FORGE_BUS
 import thedarkcolour.kotlinforforge.forge.MOD_BUS
 
@@ -122,6 +123,9 @@ object SlotInteractManager {
 
                     if (screen is AbstractContainerScreen<*>) {
                         val slot = screen.slotUnderMouse ?: return@addListener
+                        // Skip RepoSlots in ME terminals - handled by AE2Compat
+                        if (AE2Compat.isRepoSlot(slot)) return@addListener
+
                         if (!hasConversions(slot.item)) return@addListener
                         val slotScreenX = screen.guiLeft + slot.x
                         val slotScreenY = screen.guiTop + slot.y

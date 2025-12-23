@@ -1,8 +1,10 @@
 package settingdust.item_converter.compat.ae2
 
 import appeng.client.gui.me.common.MEStorageScreen
+import appeng.client.gui.me.common.RepoSlot
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.Screen
+import net.minecraft.world.inventory.Slot
 import net.minecraftforge.api.distmarker.Dist
 import net.minecraftforge.api.distmarker.OnlyIn
 import net.minecraftforge.client.event.ScreenEvent
@@ -43,6 +45,9 @@ object AE2Compat {
             lastOpenTime = now
 
             val hoveredSlot = meScreen.slotUnderMouse ?: return
+            // Only handle RepoSlots (ME network items), not player inventory slots
+            if (hoveredSlot !is RepoSlot) return
+
             val item = hoveredSlot.item
             if (item.isEmpty) return
 
@@ -66,6 +71,24 @@ object AE2Compat {
     }
 
     fun isMETerminalScreen(screen: Screen?): Boolean {
+        if (!isLoaded) return false
+        return isMETerminalScreenInternal(screen)
+    }
+
+    private fun isMETerminalScreenInternal(screen: Screen?): Boolean {
         return screen is MEStorageScreen<*>
+    }
+
+    /**
+     * Check if slot is a RepoSlot (ME network virtual slot).
+     * Returns false if AE2 isn't loaded or slot is a regular inventory slot.
+     */
+    fun isRepoSlot(slot: Slot?): Boolean {
+        if (!isLoaded) return false
+        return isRepoSlotInternal(slot)
+    }
+
+    private fun isRepoSlotInternal(slot: Slot?): Boolean {
+        return slot is RepoSlot
     }
 }

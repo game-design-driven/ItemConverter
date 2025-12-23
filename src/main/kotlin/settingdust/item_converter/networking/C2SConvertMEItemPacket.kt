@@ -32,7 +32,7 @@ data class C2SConvertMEItemPacket(
             }
         }
 
-        fun handle(packet: C2SConvertMEItemPacket, context: Supplier<NetworkEvent.Context>) {
+        fun handle(packet: C2SConvertMEItemPacket, context: Supplier<NetworkEvent.Context>) = runCatching {
             context.get().enqueueWork {
                 val player = context.get().sender ?: return@enqueueWork
                 val menu = player.containerMenu
@@ -44,7 +44,7 @@ data class C2SConvertMEItemPacket(
                     return@enqueueWork
                 }
 
-                val storage = menu.host?.inventory ?: return@enqueueWork
+                val storage = menu.host.inventory ?: return@enqueueWork
                 val inputKey = AEItemKey.of(packet.input)
                 val targetKey = AEItemKey.of(packet.target)
 
@@ -97,6 +97,8 @@ data class C2SConvertMEItemPacket(
                 }
             }
             context.get().packetHandled = true
+        }.onFailure {
+            settingdust.item_converter.ItemConverter.LOGGER.error("Error handling C2SConvertMEItemPacket", it)
         }
     }
 }
