@@ -33,7 +33,7 @@ object SlotInteractManager {
     private const val OPEN_COOLDOWN_MS = 100L
 
     val SLOT_INTERACT_KEY =
-        KeyMapping("key.item_converter.slot_interact", InputConstants.KEY_CAPSLOCK, "key.categories.inventory")
+        KeyMapping("key.item_converter.slot_interact", InputConstants.KEY_LALT, "key.categories.inventory")
 
     /** Quick check if item has any possible conversions */
     fun hasConversions(stack: ItemStack): Boolean {
