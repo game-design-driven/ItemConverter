@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2025-12-23
+### :sparkles: New Features
+- [`29fd90b`](https://github.com/game-design-driven/ItemConverter/commit/29fd90b5692cb5f6ac70d03eea27a635b8404630) - add ae2 compat *(commit by [@Yarden-zamir](https://github.com/Yarden-zamir))*
+- [`764a276`](https://github.com/game-design-driven/ItemConverter/commit/764a2762a0cc87ca5bdc913e3047e9eeab40f091) - window opens op top of selected slot *(commit by [@Yarden-zamir](https://github.com/Yarden-zamir))*
+- [`c564bef`](https://github.com/game-design-driven/ItemConverter/commit/c564befeb41d94da0ab9b6fc22bf72c76fccc983) - rewrite to only do direct recipe conversions *(commit by [@Yarden-zamir](https://github.com/Yarden-zamir))*
+
+### :bug: Bug Fixes
+- [`3a6d917`](https://github.com/game-design-driven/ItemConverter/commit/3a6d91771a4ce2a8bedc2416f82f797c14876120) - improve preformance and add scroll in hotbar support *(commit by [@Yarden-zamir](https://github.com/Yarden-zamir))*
+- [`543c84a`](https://github.com/game-design-driven/ItemConverter/commit/543c84a240431a43b603653ce8f1ee440bc97fef) - ae2 integration *(commit by [@Yarden-zamir](https://github.com/Yarden-zamir))*
+- [`4e882ae`](https://github.com/game-design-driven/ItemConverter/commit/4e882ae106d5d857e1d7d40b189d5312e8a1be8c) - get publish updated to 1.20.1 *(commit by [@Yarden-zamir](https://github.com/Yarden-zamir))*
+
+
 ## [0.3.2] - 2024-12-03
 ### :bug: Bug Fixes
 - [`da1c3c5`](https://github.com/game-design-driven/ItemConverter/commit/da1c3c51533d365483e6ad715305691c2569166e) - use the registry codec for sound event *(commit by [@SettingDust](https://github.com/SettingDust))*
@@ -85,3 +97,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.3.0]: https://github.com/game-design-driven/ItemConverter/compare/0.2.0...0.3.0
 [0.3.1]: https://github.com/game-design-driven/ItemConverter/compare/0.3.0...0.3.1
 [0.3.2]: https://github.com/game-design-driven/ItemConverter/compare/0.3.1...0.3.2
+[1.0.0]: https://github.com/game-design-driven/ItemConverter/compare/0.3.2...1.0.0
