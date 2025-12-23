@@ -23,7 +23,7 @@ internal val json = Json {
 @Serializable
 data class ClientConfig(
     /** Ticks to hold key before popup opens */
-    val pressTicks: Int = 20,
+    val pressTicks: Int = 0,
     /** Highlight color for hovered slot (ARGB hex) */
     val highlightColor: Int = 0x80FFFFFF.toInt(),
     /** Show item tooltips on hover */
