@@ -40,6 +40,7 @@ java {
 }
 
 repositories {
+    mavenCentral()
     unimined.curseMaven()
     unimined.modrinthMaven()
 
@@ -58,7 +59,7 @@ unimined.minecraft {
     mappings {
         searge()
         mojmap()
-        parchment(mcVersion = "1.19.4", version = "2023.06.26")
+        parchment(mcVersion = "1.20.1", version = "2023.09.03")
 
         devFallbackNamespace("searge")
     }
@@ -81,15 +82,14 @@ dependencies {
 
     implementation(catalog.kotlin.forge)
 
-    catalog.jgrapht.let {
-        minecraftLibraries(it)
-        implementation(it)
-        include(it)
-        minecraftLibraries("org.apfloat:apfloat:1.10.1")
-        minecraftLibraries("org.jheaps:jheaps:0.14")
-        include("org.apfloat:apfloat:1.10.1")
-        include("org.jheaps:jheaps:0.14")
+    // macOS ARM native bridge for dev environment
+    if (System.getProperty("os.name").contains("Mac")) {
+        minecraftLibraries("ca.weblite:java-objc-bridge:1.1")
     }
+
+    // Applied Energistics 2 (optional compat)
+    modImplementation("maven.modrinth:ae2:7KVs6HMQ") // 15.4.10
+    modImplementation("maven.modrinth:guideme:9YGnKYDF") // 20.1.14 (required by AE2)
 }
 
 kotlin {

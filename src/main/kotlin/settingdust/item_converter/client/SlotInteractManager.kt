@@ -1,13 +1,13 @@
 package settingdust.item_converter.client
 
 import com.mojang.blaze3d.platform.InputConstants
-import com.mojang.blaze3d.vertex.PoseStack
 import net.minecraft.client.KeyMapping
 import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.GuiComponent
-import net.minecraft.client.gui.components.Widget
+import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.gui.components.Renderable
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import net.minecraft.resources.ResourceLocation
+import net.minecraft.world.item.ItemStack
 import net.minecraftforge.api.distmarker.Dist
 import net.minecraftforge.api.distmarker.OnlyIn
 import net.minecraftforge.client.event.InputEvent
@@ -20,8 +20,8 @@ import net.minecraftforge.client.gui.overlay.GuiOverlayManager
 import net.minecraftforge.client.gui.overlay.IGuiOverlay
 import net.minecraftforge.event.TickEvent
 import settingdust.item_converter.ClientConfig
-import settingdust.item_converter.networking.C2SConvertTargetPacket
-import settingdust.item_converter.networking.Networking
+import settingdust.item_converter.RecipeHelper
+import settingdust.item_converter.compat.ae2.AE2Compat
 import thedarkcolour.kotlinforforge.forge.FORGE_BUS
 import thedarkcolour.kotlinforforge.forge.MOD_BUS
 
@@ -29,8 +29,18 @@ import thedarkcolour.kotlinforforge.forge.MOD_BUS
 object SlotInteractManager {
     var pressedTicks = 0
     var converting = false
+    private var lastOpenTime = 0L
+    private const val OPEN_COOLDOWN_MS = 100L
+
     val SLOT_INTERACT_KEY =
         KeyMapping("key.item_converter.slot_interact", InputConstants.KEY_CAPSLOCK, "key.categories.inventory")
+
+    /** Quick check if item has any possible conversions */
+    fun hasConversions(stack: ItemStack): Boolean {
+        if (stack.isEmpty) return false
+        val recipeManager = RecipeHelper.getRecipeManager() ?: return false
+        return RecipeHelper.hasConversions(recipeManager, stack)
+    }
 
     init {
         MOD_BUS.addListener { event: RegisterKeyMappingsEvent ->
@@ -58,24 +68,27 @@ object SlotInteractManager {
             if (event.phase != TickEvent.Phase.END) return@addListener
             val minecraft = Minecraft.getInstance()
             if (minecraft.player == null) return@addListener
-            val screen by lazy { minecraft.screen }
-            val inventory by lazy { minecraft.player!!.inventory }
-            if (SLOT_INTERACT_KEY.isDown &&
-                ((screen is AbstractContainerScreen<*>
-                        && (screen as AbstractContainerScreen<*>).slotUnderMouse != null
-                        && (screen as AbstractContainerScreen<*>).menu.carried.isEmpty)
-                        || (!inventory.getItem(inventory.selected).isEmpty && screen == null))
-            ) {
+            val screen = minecraft.screen
+
+            if (SLOT_INTERACT_KEY.isDown) {
+                // Keep incrementing while key is held, regardless of item
+                // Only check conversions when deciding to open screen
                 pressedTicks++
             }
         }
 
         FORGE_BUS.addListener { event: ScreenEvent.Opening ->
-            pressedTicks = 0
+            // Only reset when opening a non-ItemConvertScreen
+            if (event.screen !is ItemConvertScreen) {
+                pressedTicks = 0
+            }
         }
 
         FORGE_BUS.addListener { event: ScreenEvent.Closing ->
-            pressedTicks = 0
+            // Only reset when closing a non-ItemConvertScreen
+            if (event.screen !is ItemConvertScreen) {
+                pressedTicks = 0
+            }
         }
 
         MOD_BUS.addListener { event: RegisterGuiOverlaysEvent ->
@@ -86,15 +99,13 @@ object SlotInteractManager {
 
         FORGE_BUS.addListener { event: ScreenEvent.Render.Post ->
             val screen = event.screen
-            if (pressedTicks <= ClientConfig.config.pressTicks) {
+            if (pressedTicks > 0 && pressedTicks <= ClientConfig.config.pressTicks) {
                 if (screen is AbstractContainerScreen<*>) {
                     val hoveredSlot = screen.slotUnderMouse
-                    if (hoveredSlot != null && screen.menu.carried.isEmpty && !hoveredSlot.item.isEmpty) {
+                    if (hoveredSlot != null && screen.menu.carried.isEmpty && hasConversions(hoveredSlot.item)) {
                         progress.x = screen.guiLeft + hoveredSlot.x
                         progress.y = screen.guiTop + hoveredSlot.y
-                        progress.render(event.poseStack)
-                    } else {
-                        pressedTicks = 0
+                        progress.render(event.guiGraphics)
                     }
                 }
             }
@@ -105,74 +116,85 @@ object SlotInteractManager {
             val screen = minecraft.screen
             if (pressedTicks > ClientConfig.config.pressTicks) {
                 if (!converting) {
+                    // Cooldown to prevent spam
+                    val now = System.currentTimeMillis()
+                    if (now - lastOpenTime < OPEN_COOLDOWN_MS) return@addListener
+                    lastOpenTime = now
+
                     if (screen is AbstractContainerScreen<*>) {
+                        val slot = screen.slotUnderMouse ?: return@addListener
+                        // Skip RepoSlots in ME terminals - handled by AE2Compat
+                        if (AE2Compat.isRepoSlot(slot)) return@addListener
+
+                        if (!hasConversions(slot.item)) return@addListener
+                        val slotScreenX = screen.guiLeft + slot.x
+                        val slotScreenY = screen.guiTop + slot.y
                         minecraft.pushGuiLayer(
                             ItemConvertScreen(
                                 screen,
-                                screen.slotUnderMouse!!
+                                slot,
+                                slotScreenX,
+                                slotScreenY
                             )
                         )
                         converting = true
                     } else if (screen == null) {
-                        val slotIndex = 36 + minecraft.player!!.inventory.selected
+                        val inventory = minecraft.player!!.inventory
+                        val item = inventory.getItem(inventory.selected)
+                        if (!hasConversions(item)) return@addListener
+                        val slotIndex = 36 + inventory.selected
+                        val screenWidth = event.guiGraphics.guiWidth()
+                        val screenHeight = event.guiGraphics.guiHeight()
+                        val slotScreenX = screenWidth / 2 - 91 + inventory.selected * 20 + 3
+                        val slotScreenY = screenHeight - 22 + 3
                         minecraft.setScreen(
                             ItemConvertScreen(
                                 screen,
-                                Minecraft.getInstance().player!!.inventoryMenu.getSlot(slotIndex)
+                                Minecraft.getInstance().player!!.inventoryMenu.getSlot(slotIndex),
+                                slotScreenX,
+                                slotScreenY
                             )
                         )
                         converting = true
-                        pressedTicks = 0
                     }
-                }
-            }
-        }
-
-        FORGE_BUS.addListener { event: InputEvent.InteractionKeyMappingTriggered ->
-            when {
-                event.isPickBlock -> {
-                    val minecraft = Minecraft.getInstance()
-                    val player = minecraft.player ?: return@addListener
-                    val sneaking = player.isCrouching
-                    if (player.abilities.instabuild && !sneaking) return@addListener
-                    event.isCanceled = true
-                    Networking.channel.sendToServer(C2SConvertTargetPacket)
                 }
             }
         }
     }
 }
 
+@OnlyIn(Dist.CLIENT)
 data class SlotInteractProgress(
     var x: Int = 0,
     var y: Int = 0
-) : GuiComponent(), Widget, IGuiOverlay {
+) : Renderable, IGuiOverlay {
     companion object {
         const val WIDTH = 16
         const val HEIGHT = 2
         const val COLOR = 0xFFF0F0F0.toInt()
     }
 
-    fun render(poseStack: PoseStack) {
+    fun render(guiGraphics: GuiGraphics) {
         if (SlotInteractManager.converting) return
+        if (ClientConfig.config.pressTicks <= 0) return
         val progress =
             (SlotInteractManager.pressedTicks / ClientConfig.config.pressTicks.toFloat()).coerceIn(0f, 1f)
         val width = (WIDTH * progress).toInt()
         if (width > 0) {
-            fill(poseStack, x, y, x + width, y + HEIGHT, COLOR)
+            guiGraphics.fill(x, y, x + width, y + HEIGHT, COLOR)
         }
     }
 
     override fun render(
-        poseStack: PoseStack,
+        guiGraphics: GuiGraphics,
         mouseX: Int,
         mouseY: Int,
         partialTick: Float
-    ) = render(poseStack)
+    ) = render(guiGraphics)
 
     override fun render(
         gui: ForgeGui,
-        poseStack: PoseStack,
+        guiGraphics: GuiGraphics,
         partialTick: Float,
         screenWidth: Int,
         screenHeight: Int
@@ -183,6 +205,6 @@ data class SlotInteractProgress(
         val inventory = gui.minecraft.player!!.inventory
         x = screenWidth / 2 - 91 + inventory.selected * 20 + 3
         y = screenHeight - 22 + 3
-        render(poseStack)
+        render(guiGraphics)
     }
 }

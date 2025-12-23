@@ -21,7 +21,18 @@ internal val json = Json {
 
 @OnlyIn(Dist.CLIENT)
 @Serializable
-data class ClientConfig(val pressTicks: Int = 20) {
+data class ClientConfig(
+    /** Ticks to hold key before popup opens */
+    val pressTicks: Int = 20,
+    /** Highlight color for hovered slot (ARGB hex) */
+    val highlightColor: Int = 0x80FFFFFF.toInt(),
+    /** Show item tooltips on hover */
+    val showTooltips: Boolean = true,
+    /** Show conversion ratio (e.g. "2:3") in tooltip */
+    val showRatioInTooltip: Boolean = true,
+    /** Allow scrolling to change hotbar slot while popup is open */
+    val allowScroll: Boolean = true
+) {
     companion object {
         private val path = FMLPaths.CONFIGDIR.get() / "${ItemConverter.ID}.client.json"
 
@@ -40,7 +51,12 @@ data class ClientConfig(val pressTicks: Int = 20) {
 }
 
 @Serializable
-data class CommonConfig(val bidirectionalConversion: Boolean = false) {
+data class CommonConfig(
+    /** Recipe types to use for conversions (e.g. "minecraft:stonecutting") */
+    val recipeTypes: List<String> = listOf("minecraft:stonecutting"),
+    /** Allow bidirectional conversions (input <-> output) */
+    val bidirectionalConversion: Boolean = true
+) {
     companion object {
         private val path = FMLPaths.CONFIGDIR.get() / "${ItemConverter.ID}.common.json"
 

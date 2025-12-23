@@ -3,12 +3,12 @@ package settingdust.item_converter
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.BufferBuilder
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
-import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.blaze3d.vertex.Tesselator
 import com.mojang.blaze3d.vertex.VertexFormat
-import com.mojang.math.Matrix4f
+import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.client.renderer.GameRenderer
 import net.minecraft.resources.ResourceLocation
+import org.joml.Matrix4f
 
 /**
  * Breaks a texture into 9 pieces so that it can be scaled to any size.
@@ -33,7 +33,7 @@ class DrawableNineSliceTexture(
     private val u1 = u1 / textureWidth.toFloat()
     private val v1 = v1 / textureHeight.toFloat()
 
-    fun draw(poseStack: PoseStack, xOffset: Int, yOffset: Int, width: Int, height: Int) {
+    fun draw(guiGraphics: GuiGraphics, xOffset: Int, yOffset: Int, width: Int, height: Int) {
         RenderSystem.setShader { GameRenderer.getPositionTexShader() }
         RenderSystem.setShaderTexture(0, location)
 
@@ -45,7 +45,7 @@ class DrawableNineSliceTexture(
         val tessellator = Tesselator.getInstance()
         val bufferBuilder = tessellator.builder
         bufferBuilder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX)
-        val matrix = poseStack.last().pose()
+        val matrix = guiGraphics.pose().last().pose()
 
         // left top
         draw(bufferBuilder, matrix, u0, v0, uLeft, vTop, xOffset, yOffset, sliceLeft, sliceTop)

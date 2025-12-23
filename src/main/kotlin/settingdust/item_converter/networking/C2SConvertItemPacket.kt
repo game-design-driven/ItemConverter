@@ -2,117 +2,110 @@ package settingdust.item_converter.networking
 
 import com.mojang.serialization.Codec
 import com.mojang.serialization.codecs.RecordCodecBuilder
-import net.minecraft.network.chat.Component
+import net.minecraft.sounds.SoundEvents
 import net.minecraft.sounds.SoundSource
-import net.minecraft.util.StringRepresentable
 import net.minecraft.world.item.ItemStack
 import net.minecraftforge.network.NetworkEvent
-import org.apache.commons.lang3.math.Fraction
-import org.jgrapht.alg.shortestpath.DijkstraShortestPath
-import settingdust.item_converter.ConvertRules
 import settingdust.item_converter.ItemConverter
-import settingdust.item_converter.MoreCodecs
-import settingdust.item_converter.SimpleItemPredicate
+import settingdust.item_converter.RecipeHelper
 import java.util.function.Supplier
 
-data class C2SConvertItemPacket(val slot: Int, val target: ItemStack, val mode: Mode) {
+enum class ConvertAction {
+    /** Replace items in the original slot */
+    REPLACE,
+    /** Move converted items to player inventory */
+    TO_INVENTORY,
+    /** Drop converted items into the world */
+    DROP
+}
+
+data class C2SConvertItemPacket(
+    val slot: Int,
+    val target: ItemStack,
+    val count: Int,  // -1 = all, otherwise specific count
+    val action: ConvertAction
+) {
     companion object {
-        val CODEC = RecordCodecBuilder.create<C2SConvertItemPacket> { instance ->
+        val CODEC: Codec<C2SConvertItemPacket> = RecordCodecBuilder.create { instance ->
             instance.group(
                 Codec.INT.fieldOf("slot").forGetter { it.slot },
-                MoreCodecs.ITEM_STACK.fieldOf("target").forGetter { it.target },
-                StringRepresentable.fromEnum { Mode.values() }.fieldOf("mode").forGetter { it.mode }
-            ).apply(instance, ::C2SConvertItemPacket)
+                ItemStack.CODEC.fieldOf("target").forGetter { it.target },
+                Codec.INT.fieldOf("count").forGetter { it.count },
+                Codec.STRING.fieldOf("action").forGetter { it.action.name }
+            ).apply(instance) { slot, target, count, action ->
+                C2SConvertItemPacket(slot, target, count, ConvertAction.valueOf(action))
+            }
         }
 
         fun handle(packet: C2SConvertItemPacket, context: Supplier<NetworkEvent.Context>) = runCatching {
-            val player = context.get().sender
-            if (player == null) {
-                ItemConverter.LOGGER.warn("Received C2SConvertItemPacket from null player.")
-                return@runCatching
-            }
-            val container = player.containerMenu
-            if (container == null) {
-                ItemConverter.LOGGER.warn("Received C2SConvertItemPacket of null container from ${player.displayName}.")
-                return@runCatching
-            }
-            val slot = container.getSlot(packet.slot)
-            val fromItem = slot.item
-            val from = ConvertRules.graph.vertexSet().firstOrNull { it.test(fromItem) }
-            if (from == null) {
-                player.sendSystemMessage(
-                    Component.translatable(
-                        "messages.${ItemConverter.ID}.no_rule",
-                        fromItem.displayName
-                    )
-                )
-                return@runCatching
-            }
-            val targetPredicate = SimpleItemPredicate(packet.target)
-            val to = ConvertRules.graph.vertexSet().firstOrNull { it == targetPredicate }
-            if (to == null) {
-                ItemConverter.LOGGER.error("${player.displayName.string} trying to convert ${fromItem.displayName.string} to target not in graph ${packet.target.displayName.string}")
-                return@runCatching
-            }
-            val path = DijkstraShortestPath.findPathBetween(ConvertRules.graph, from, to)
-            if (path == null || path.vertexList.size < 2) {
-                ItemConverter.LOGGER.error("${player.displayName.string} trying to convert ${fromItem.displayName.string} to unreachable target ${packet.target.displayName.string}")
-                return@runCatching
-            }
-            val ratio = path.edgeList.fold(Fraction.ONE) { acc, edge -> edge.fraction.multiplyBy(acc) }
-            val (itemToInsert, removeMaterials) = when (packet.mode) {
-                Mode.SINGLE_CLICK -> {
-                    if (ratio.denominator > fromItem.count) {
-                        return@runCatching
+            context.get().enqueueWork {
+                val player = context.get().sender ?: return@enqueueWork
+                val container = player.containerMenu ?: return@enqueueWork
+
+                val slot = container.getSlot(packet.slot)
+                val fromItem = slot.item
+
+                if (fromItem.isEmpty) return@enqueueWork
+
+                val recipeManager = player.level().recipeManager
+
+                if (!RecipeHelper.isValidConversion(recipeManager, fromItem, packet.target)) {
+                    return@enqueueWork
+                }
+
+                // Calculate how many to convert
+                val convertCount = if (packet.count == -1) fromItem.count else minOf(packet.count, fromItem.count)
+                if (convertCount <= 0) return@enqueueWork
+
+                // Remove input items
+                slot.safeTake(convertCount, convertCount, player)
+
+                // Create output
+                val result = packet.target.copy()
+                result.count = convertCount
+
+                when (packet.action) {
+                    ConvertAction.REPLACE -> {
+                        // Put back in same slot if possible, otherwise to inventory
+                        if (slot.mayPlace(result)) {
+                            if (slot.item.isEmpty) {
+                                slot.set(result)
+                            } else if (ItemStack.isSameItemSameTags(slot.item, result)) {
+                                slot.item.grow(result.count)
+                            } else {
+                                // Slot has different item now, fallback to inventory
+                                if (!player.inventory.add(result)) {
+                                    player.drop(result, false)
+                                }
+                            }
+                        } else {
+                            if (!player.inventory.add(result)) {
+                                player.drop(result, false)
+                            }
+                        }
+                        // Play conversion sound
+                        player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                     }
-                    val itemToInsert = to.predicate.copy().also {
-                        it.count = ratio.numerator
+                    ConvertAction.TO_INVENTORY -> {
+                        if (!player.inventory.add(result)) {
+                            player.drop(result, false)
+                        }
+                        // Play conversion + pickup sound
+                        player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
+                        player.level().playSound(null, player.blockPosition(), SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.2f, ((player.random.nextFloat() - player.random.nextFloat()) * 0.7f + 1.0f) * 2.0f)
                     }
-                    itemToInsert to {
-                        slot.safeTake(ratio.denominator, ratio.denominator, player)
-                        val lastEdge = path.edgeList.last()
-                        player.playNotifySound(
-                            lastEdge.sound,
-                            SoundSource.BLOCKS,
-                            (player.random.nextFloat() * 0.7F + 1.0F) * 2.0f * lastEdge.volume,
-                            lastEdge.pitch
-                        )
+                    ConvertAction.DROP -> {
+                        player.drop(result, false)
+                        // Play conversion sound
+                        player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                     }
                 }
 
-                Mode.SHIFT_CLICK -> {
-                    val times = fromItem.count / ratio.denominator
-                    val amount = ratio.denominator * times
-                    val itemToInsert = to.predicate.copy().also {
-                        it.count = ratio.numerator * times
-                    }
-
-                    itemToInsert to {
-                        slot.safeTake(amount, amount, player)
-
-                        val lastEdge = path.edgeList.last()
-                        player.playNotifySound(
-                            lastEdge.sound,
-                            SoundSource.BLOCKS,
-                            (player.random.nextFloat() * 0.7F + 1.0F) * 2.0f * lastEdge.volume,
-                            lastEdge.pitch
-                        )
-                    }
-                }
+                container.broadcastChanges()
             }
-
-            val selected = player.inventory.getItem(player.inventory.selected)
-
-            C2SConvertTargetPacket.insertResult(packet.target, itemToInsert, selected, removeMaterials, player)
+            context.get().packetHandled = true
         }.onFailure {
             ItemConverter.LOGGER.error("Error handling C2SConvertItemPacket", it)
         }
-    }
-
-    enum class Mode(private val serialName: String) : StringRepresentable {
-        SINGLE_CLICK("single"),
-        SHIFT_CLICK("shift");
-
-        override fun getSerializedName() = serialName
     }
 }
