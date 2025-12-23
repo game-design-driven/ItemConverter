@@ -132,10 +132,11 @@ data class ItemConvertScreen(
     private fun performConversion(target: ItemStack, count: Int, action: ConvertAction) {
         if (parent is CreativeModeInventoryScreen) {
             // Creative mode - client-side only, give items directly
-            // For simplicity, just give one stack to inventory
             val player = minecraft!!.player!!
+            val outputPerInput = target.count
+            val inputCount = if (count == -1) input.count else count
             val result = target.copy()
-            result.count = if (count == -1) input.count else count
+            result.count = inputCount * outputPerInput
             player.inventory.add(result)
             for ((i, invSlot) in player.inventoryMenu.slots.withIndex()) {
                 if (!ItemStack.isSameItemSameTags(invSlot.item, target)) continue

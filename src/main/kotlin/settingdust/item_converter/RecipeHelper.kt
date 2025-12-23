@@ -3,14 +3,13 @@ package settingdust.item_converter
 import net.minecraft.client.Minecraft
 import net.minecraft.resources.ResourceLocation
 import net.minecraft.world.item.ItemStack
-import net.minecraft.world.item.crafting.Ingredient
 import net.minecraft.world.item.crafting.RecipeManager
 import net.minecraft.world.item.crafting.RecipeType
-import net.minecraft.world.item.crafting.SingleItemRecipe
 import net.minecraft.world.item.crafting.StonecutterRecipe
 
 /**
- * Helper to query vanilla recipe registry for 1:1 conversions.
+ * Helper to query vanilla recipe registry for conversions.
+ * Supports 1:N recipes (e.g., 1 stone -> 2 stone slabs).
  * Uses stonecutting recipes by default.
  */
 object RecipeHelper {
@@ -75,27 +74,12 @@ object RecipeHelper {
             val ingredient = ingredients[0]
             val output = recipe.getResultItem(null)
 
-            // Forward conversion: input matches recipe input
-            if (ingredient.test(input) && !output.isEmpty && output.count == 1) {
+            // 1:N conversion: 1 input -> N output (N = output.count)
+            if (ingredient.test(input) && !output.isEmpty) {
                 val outputId = output.item.builtInRegistryHolder().key().location()
                 if (outputId !in seenOutputs) {
                     seenOutputs.add(outputId)
                     results.add(ConversionTarget(output.copy()))
-                }
-            }
-
-            // Bidirectional conversion: input matches recipe output
-            if (CommonConfig.config.bidirectionalConversion && !output.isEmpty) {
-                if (ItemStack.isSameItemSameTags(input, output)) {
-                    for (matchingItem in ingredient.items) {
-                        if (matchingItem.count == 1) {
-                            val targetId = matchingItem.item.builtInRegistryHolder().key().location()
-                            if (targetId !in seenOutputs) {
-                                seenOutputs.add(targetId)
-                                results.add(ConversionTarget(matchingItem.copy()))
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -122,16 +106,8 @@ object RecipeHelper {
             val ingredient = ingredients[0]
             val output = recipe.getResultItem(null)
 
-            // Forward match
-            if (ingredient.test(input) && !output.isEmpty && output.count == 1) {
+            if (ingredient.test(input) && !output.isEmpty) {
                 return true
-            }
-
-            // Reverse match (bidirectional)
-            if (CommonConfig.config.bidirectionalConversion && !output.isEmpty) {
-                if (ItemStack.isSameItemSameTags(input, output)) {
-                    if (ingredient.items.any { it.count == 1 }) return true
-                }
             }
         }
 

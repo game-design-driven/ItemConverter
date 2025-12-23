@@ -60,9 +60,10 @@ data class C2SConvertItemPacket(
                 // Remove input items
                 slot.safeTake(convertCount, convertCount, player)
 
-                // Create output
+                // Create output (1:N recipe support - multiply by recipe output count)
+                val outputPerInput = packet.target.count
                 val result = packet.target.copy()
-                result.count = convertCount
+                result.count = convertCount * outputPerInput
 
                 when (packet.action) {
                     ConvertAction.REPLACE -> {

@@ -63,14 +63,18 @@ data class C2SConvertMEItemPacket(
                     return@enqueueWork
                 }
 
+                // 1:N recipe support - multiply by recipe output count
+                val outputPerInput = packet.target.count
+                val totalOutput = convertCount * outputPerInput
+
                 when (packet.action) {
                     ConvertAction.REPLACE -> {
                         // Insert converted items back into ME storage
-                        val inserted = storage.insert(targetKey, convertCount, appeng.api.config.Actionable.MODULATE, menu.actionSource)
-                        if (inserted < convertCount) {
+                        val inserted = storage.insert(targetKey, totalOutput, appeng.api.config.Actionable.MODULATE, menu.actionSource)
+                        if (inserted < totalOutput) {
                             // Give remainder to player
                             val remainder = packet.target.copy()
-                            remainder.count = (convertCount - inserted).toInt()
+                            remainder.count = (totalOutput - inserted).toInt()
                             if (!player.inventory.add(remainder)) {
                                 player.drop(remainder, false)
                             }
@@ -80,7 +84,7 @@ data class C2SConvertMEItemPacket(
                     ConvertAction.TO_INVENTORY -> {
                         // Give to player inventory
                         val result = packet.target.copy()
-                        result.count = convertCount.toInt()
+                        result.count = totalOutput.toInt()
                         if (!player.inventory.add(result)) {
                             player.drop(result, false)
                         }
@@ -90,7 +94,7 @@ data class C2SConvertMEItemPacket(
                     ConvertAction.DROP -> {
                         // Drop into world
                         val result = packet.target.copy()
-                        result.count = convertCount.toInt()
+                        result.count = totalOutput.toInt()
                         player.drop(result, false)
                         player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                     }
