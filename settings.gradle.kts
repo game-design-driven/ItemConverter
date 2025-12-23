@@ -45,8 +45,6 @@ dependencyResolutionManagement.versionCatalogs.create("catalog") {
     library("mixinextras-common", "io.github.llamalad7", "mixinextras-common").version(mixinextras)
     library("mixinextras-lexforge", "io.github.llamalad7", "mixinextras-forge").version(mixinextras)
     library("mixinextras-fabric", "io.github.llamalad7", "mixinextras-fabric").version(mixinextras)
-
-    library("jgrapht", "org.jgrapht", "jgrapht-core").version("1.5.2")
 }
 
 plugins {

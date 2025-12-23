@@ -1,7 +1,0 @@
-{
-    "type": "item_converter:recipe",
-    "recipe_type": "minecraft:stonecutting",
-    "sound": "ui.stonecutter.take_result",
-    "pitch": 1.0,
-    "volume": 1.0
-}
