@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2025-12-23
+### :sparkles: New Features
+- [`f6ef803`](https://github.com/game-design-driven/ItemConverter/commit/f6ef803ff4acf3b7fb2fa50e28f3b667c5ca0aea) - default key > alt *(commit by [@Yarden-zamir](https://github.com/Yarden-zamir))*
+- [`88c54f2`](https://github.com/game-design-driven/ItemConverter/commit/88c54f24d433c8339e749d4c1e465c8db0736397) - default pressTicks > 0 *(commit by [@Yarden-zamir](https://github.com/Yarden-zamir))*
+
+
 ## [1.0.2] - 2025-12-23
 ### :sparkles: New Features
 - [`29fd90b`](https://github.com/game-design-driven/ItemConverter/commit/29fd90b5692cb5f6ac70d03eea27a635b8404630) - add ae2 compat *(commit by [@Yarden-zamir](https://github.com/Yarden-zamir))*
@@ -112,3 +118,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.3.2]: https://github.com/game-design-driven/ItemConverter/compare/0.3.1...0.3.2
 [1.0.0]: https://github.com/game-design-driven/ItemConverter/compare/0.3.2...1.0.0
 [1.0.2]: https://github.com/game-design-driven/ItemConverter/compare/1.0.1...1.0.2
+[1.0.3]: https://github.com/game-design-driven/ItemConverter/compare/1.0.2...1.0.3
