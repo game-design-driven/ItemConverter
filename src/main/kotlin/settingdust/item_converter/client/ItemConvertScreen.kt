@@ -40,6 +40,8 @@ data class ItemConvertScreen(
 
         private const val SLOT_SIZE = 18
 
+        private const val SELECTION_DELAY_MS = 100L
+
         val texture = DrawableNineSliceTexture(
             TEXTURE,
             TEXTURE_WIDTH,
@@ -63,6 +65,10 @@ data class ItemConvertScreen(
     private var slotInColumn = 1
     private val input = getFrom()
     private val itemButtons = mutableListOf<ItemButton>()
+
+    // Number key selection
+    private var selectedIndex: Int = -1
+    private var selectionTime: Long = 0
 
     private fun getFrom() = slot.item
 
@@ -118,11 +124,16 @@ data class ItemConvertScreen(
                 x = buttonX,
                 y = buttonY,
                 width = SLOT_SIZE,
-                height = SLOT_SIZE
+                height = SLOT_SIZE,
+                isSpecial = conversion.isSpecial
             )
             itemButtons.add(button)
             addRenderableWidget(button)
         }
+
+        // Reset selection state
+        selectedIndex = -1
+        selectionTime = 0
     }
 
     private fun getHoveredButton(mouseX: Double, mouseY: Double): ItemButton? {
@@ -150,6 +161,16 @@ data class ItemConvertScreen(
     }
 
     override fun render(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
+        // Check if number key selection delay has passed
+        if (selectedIndex >= 0 && selectedIndex < itemButtons.size) {
+            if (System.currentTimeMillis() - selectionTime >= SELECTION_DELAY_MS) {
+                val button = itemButtons[selectedIndex]
+                performConversion(button.item, -1, ConvertAction.REPLACE)
+                onClose()
+                return
+            }
+        }
+
         // Key released - convert all to hovered item (REPLACE action)
         if (!SlotInteractManager.converting) {
             getHoveredButton(mouseX.toDouble(), mouseY.toDouble())?.let { button ->
@@ -166,6 +187,46 @@ data class ItemConvertScreen(
         }
         renderBackground(guiGraphics)
         super.render(guiGraphics, mouseX, mouseY, partialTick)
+
+        // Render number labels above window (outside)
+        val font = minecraft!!.font
+        val maxLabels = minOf(slotInRow, 9)
+        for (i in 0 until maxLabels) {
+            val label = (i + 1).toString()
+            val labelX = x + BORDER + SLOT_SIZE * i + (SLOT_SIZE - font.width(label)) / 2
+            val labelY = y - font.lineHeight - 2
+            guiGraphics.drawString(font, label, labelX, labelY, 0xFFFFFF, true)
+        }
+
+        // Render selection highlight
+        if (selectedIndex >= 0 && selectedIndex < itemButtons.size) {
+            val button = itemButtons[selectedIndex]
+            guiGraphics.fill(button.x + 1, button.y + 1, button.x + button.width - 1, button.y + button.height - 1, 0x80FFFF00.toInt())
+        }
+    }
+
+    override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
+        // Check for number keys 1-9
+        val numberIndex = when (keyCode) {
+            InputConstants.KEY_1 -> 0
+            InputConstants.KEY_2 -> 1
+            InputConstants.KEY_3 -> 2
+            InputConstants.KEY_4 -> 3
+            InputConstants.KEY_5 -> 4
+            InputConstants.KEY_6 -> 5
+            InputConstants.KEY_7 -> 6
+            InputConstants.KEY_8 -> 7
+            InputConstants.KEY_9 -> 8
+            else -> -1
+        }
+
+        if (numberIndex >= 0 && numberIndex < itemButtons.size) {
+            selectedIndex = numberIndex
+            selectionTime = System.currentTimeMillis()
+            return true
+        }
+
+        return super.keyPressed(keyCode, scanCode, modifiers)
     }
 
     override fun mouseClicked(mouseX: Double, mouseY: Double, button: Int): Boolean {
@@ -250,11 +311,28 @@ class ItemButton(
     x: Int,
     y: Int,
     width: Int,
-    height: Int
+    height: Int,
+    val isSpecial: Boolean = false
 ) : Button(x, y, width, height, Component.empty(), { }, DEFAULT_NARRATION) {
 
     override fun renderWidget(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
+        // Draw special tag border
+        if (isSpecial) {
+            val borderColor = ClientConfig.config.specialTagBorderColor
+            // Top
+            guiGraphics.fill(x, y, x + width, y + 1, borderColor)
+            // Bottom
+            guiGraphics.fill(x, y + height - 1, x + width, y + height, borderColor)
+            // Left
+            guiGraphics.fill(x, y, x + 1, y + height, borderColor)
+            // Right
+            guiGraphics.fill(x + width - 1, y, x + width, y + height, borderColor)
+        }
+
         guiGraphics.renderItem(item, x + 1, y + 1)
+        if (item.count > 1) {
+            guiGraphics.renderItemDecorations(Minecraft.getInstance().font, item, x + 1, y + 1)
+        }
         if (isMouseOver(mouseX.toDouble(), mouseY.toDouble())) {
             guiGraphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, ClientConfig.config.highlightColor)
             if (ClientConfig.config.showTooltips) {
