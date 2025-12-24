@@ -1,7 +1,10 @@
 package settingdust.item_converter
 
 import net.minecraft.client.Minecraft
+import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.resources.ResourceLocation
+import net.minecraft.tags.TagKey
+import net.minecraft.world.item.Item
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.crafting.RecipeManager
 import net.minecraft.world.item.crafting.RecipeType
@@ -28,7 +31,9 @@ object RecipeHelper {
     }
 
     data class ConversionTarget(
-        val output: ItemStack
+        val output: ItemStack,
+        /** Whether this item has a special tag */
+        val isSpecial: Boolean = false
     )
 
     fun getConversions(recipeManager: RecipeManager, input: ItemStack): List<ConversionTarget> {
@@ -41,10 +46,44 @@ object RecipeHelper {
             collectConversions(recipeManager, recipeTypeId, input, results, seenOutputs)
         }
 
-        // Sort by output item registry name for consistent ordering
-        return results.sortedBy {
-            it.output.item.builtInRegistryHolder().key().location().toString()
-        }
+        return sortConversions(results)
+    }
+
+    /**
+     * Sort conversions:
+     * 1. Special tag items first
+     * 2. By tag names (alphabetically)
+     * 3. By reversed registry name
+     */
+    private fun sortConversions(results: List<ConversionTarget>): List<ConversionTarget> {
+        return results.sortedWith(
+            compareBy<ConversionTarget> { !it.isSpecial } // Special items first (false < true)
+                .thenBy { target ->
+                    target.output.item.builtInRegistryHolder().tags()
+                        .map { it.location.toString() }
+                        .toList()
+                        .sorted()
+                        .joinToString(",")
+                }
+                .thenBy { target ->
+                    target.output.item.builtInRegistryHolder().key().location().toString().reversed()
+                }
+        )
+    }
+
+    /** Check if an item has any of the configured special tags (checks both item and block tags) */
+    fun hasSpecialTag(item: ItemStack): Boolean {
+        val specialTags = ClientConfig.config.specialTags
+        if (specialTags.isEmpty()) return false
+
+        // Check item tags
+        val itemTags = item.item.builtInRegistryHolder().tags().map { it.location.toString() }.toList().toSet()
+        if (specialTags.any { it in itemTags }) return true
+
+        // Check block tags if item is a BlockItem
+        val blockItem = item.item as? net.minecraft.world.item.BlockItem ?: return false
+        val blockTags = blockItem.block.builtInRegistryHolder().tags().map { it.location.toString() }.toList().toSet()
+        return specialTags.any { it in blockTags }
     }
 
     private fun collectConversions(
@@ -79,7 +118,8 @@ object RecipeHelper {
                 val outputId = output.item.builtInRegistryHolder().key().location()
                 if (outputId !in seenOutputs) {
                     seenOutputs.add(outputId)
-                    results.add(ConversionTarget(output.copy()))
+                    val outputCopy = output.copy()
+                    results.add(ConversionTarget(outputCopy, hasSpecialTag(outputCopy)))
                 }
             }
         }

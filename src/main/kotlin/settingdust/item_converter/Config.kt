@@ -30,12 +30,24 @@ data class ClientConfig(
     /** Show item tooltips on hover */
     val showTooltips: Boolean = true,
     /** Allow scrolling to change hotbar slot while popup is open */
-    val allowScroll: Boolean = true
+    val allowScroll: Boolean = true,
+    /** Enable middle-click to convert items to targeted block */
+    val middleClickConvert: Boolean = true,
+    /**
+     * Tags that receive special treatment: appear first in results,
+     * have highlighted border, and are preferred for middle-click conversion
+     */
+    val specialTags: List<String> = listOf(),
+    /** Border color for special tag items (ARGB hex) */
+    val specialTagBorderColor: Int = 0xFFFFD700.toInt()
 ) {
     companion object {
         private val path = FMLPaths.CONFIGDIR.get() / "${ItemConverter.ID}.client.json"
 
         var config = ClientConfig()
+
+        /** Runtime toggle for middle-click conversion (can be changed via command) */
+        var middleClickEnabled = true
 
         @OptIn(ExperimentalSerializationApi::class)
         fun reload() {
@@ -45,6 +57,8 @@ data class ClientConfig(
             }
             config = json.decodeFromStream(path.inputStream())
             json.encodeToStream(config, path.outputStream())
+            // Sync runtime toggle with config on reload
+            middleClickEnabled = config.middleClickConvert
         }
     }
 }
