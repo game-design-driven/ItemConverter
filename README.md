@@ -76,3 +76,4 @@ Configure special item tags that receive priority treatment:
 ## Compatibility
 
 - **Applied Energistics 2**: Works with ME terminals for converting items in ME storage
+
