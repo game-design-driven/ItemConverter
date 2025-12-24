@@ -22,6 +22,8 @@ import net.minecraftforge.event.TickEvent
 import settingdust.item_converter.ClientConfig
 import settingdust.item_converter.RecipeHelper
 import settingdust.item_converter.compat.ae2.AE2Compat
+import settingdust.item_converter.networking.C2SConvertTargetPacket
+import settingdust.item_converter.networking.Networking
 import thedarkcolour.kotlinforforge.forge.FORGE_BUS
 import thedarkcolour.kotlinforforge.forge.MOD_BUS
 
@@ -159,6 +161,21 @@ object SlotInteractManager {
                     }
                 }
             }
+        }
+
+        // Middle-click to convert items to targeted block
+        FORGE_BUS.addListener { event: InputEvent.InteractionKeyMappingTriggered ->
+            if (!event.isPickBlock) return@addListener
+            if (!ClientConfig.middleClickEnabled) return@addListener
+
+            val minecraft = Minecraft.getInstance()
+            val player = minecraft.player ?: return@addListener
+
+            // In creative mode without shift, let vanilla pick block work
+            if (player.abilities.instabuild && !player.isCrouching) return@addListener
+
+            event.isCanceled = true
+            Networking.channel.sendToServer(C2SConvertTargetPacket)
         }
     }
 }

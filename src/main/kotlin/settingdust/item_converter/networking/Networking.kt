@@ -25,5 +25,13 @@ object Networking {
             { it.readWithCodec(NbtOps.INSTANCE, C2SConvertMEItemPacket.CODEC) },
             { packet, context -> C2SConvertMEItemPacket.handle(packet, context) }
         )
+        // Empty packet - just signals middle-click, server does all the work
+        channel.registerMessage(
+            2,
+            C2SConvertTargetPacket::class.java,
+            { _, _ -> },
+            { C2SConvertTargetPacket },
+            { _, context -> C2SConvertTargetPacket.handle(context) }
+        )
     }
 }
