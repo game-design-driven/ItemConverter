@@ -1,6 +1,6 @@
 # Item Converter
 
-Convert items directly from your inventory using recipe types.
+Convert items directly from your inventory/me system using recipe types.
 
 ## Features
 
