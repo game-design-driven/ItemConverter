@@ -84,7 +84,7 @@ dependencies {
 
     // macOS ARM native bridge for dev environment
     if (System.getProperty("os.name").contains("Mac")) {
-        minecraftLibraries("ca.weblite:java-objc-bridge:1.1")
+        minecraftLibraries("ca.weblite:java-objc-bridge:1.2")
     }
 
     // Applied Energistics 2 (optional compat)
