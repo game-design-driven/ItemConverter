@@ -71,31 +71,21 @@ data class C2SConvertMEItemPacket(
                     ConvertAction.REPLACE -> {
                         // Insert converted items back into ME storage
                         val inserted = storage.insert(targetKey, totalOutput, appeng.api.config.Actionable.MODULATE, menu.actionSource)
-                        if (inserted < totalOutput) {
-                            // Give remainder to player
-                            val remainder = packet.target.copy()
-                            remainder.count = (totalOutput - inserted).toInt()
-                            if (!player.inventory.add(remainder)) {
-                                player.drop(remainder, false)
-                            }
+                        val remainder = totalOutput - inserted
+                        if (remainder > 0) {
+                            addToInventoryOrDrop(player, packet.target, remainder)
                         }
                         player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                     }
                     ConvertAction.TO_INVENTORY -> {
                         // Give to player inventory
-                        val result = packet.target.copy()
-                        result.count = totalOutput.toInt()
-                        if (!player.inventory.add(result)) {
-                            player.drop(result, false)
-                        }
+                        addToInventoryOrDrop(player, packet.target, totalOutput)
                         player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                         player.level().playSound(null, player.blockPosition(), SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.2f, ((player.random.nextFloat() - player.random.nextFloat()) * 0.7f + 1.0f) * 2.0f)
                     }
                     ConvertAction.DROP -> {
                         // Drop into world
-                        val result = packet.target.copy()
-                        result.count = totalOutput.toInt()
-                        player.drop(result, false)
+                        dropStacks(player, packet.target, totalOutput)
                         player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                     }
                 }

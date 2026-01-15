@@ -2,8 +2,12 @@ package settingdust.item_converter.networking
 
 import com.mojang.serialization.Codec
 import com.mojang.serialization.codecs.RecordCodecBuilder
+import net.minecraft.server.level.ServerPlayer
 import net.minecraft.sounds.SoundEvents
 import net.minecraft.sounds.SoundSource
+import net.minecraft.world.entity.player.Inventory
+import net.minecraft.world.inventory.AbstractContainerMenu
+import net.minecraft.world.inventory.Slot
 import net.minecraft.world.item.ItemStack
 import net.minecraftforge.network.NetworkEvent
 import settingdust.item_converter.ItemConverter
@@ -62,41 +66,46 @@ data class C2SConvertItemPacket(
 
                 // Create output (1:N recipe support - multiply by recipe output count)
                 val outputPerInput = packet.target.count
-                val result = packet.target.copy()
-                result.count = convertCount * outputPerInput
+                val totalOutput = convertCount.toLong() * outputPerInput.toLong()
+                if (totalOutput <= 0) return@enqueueWork
 
                 when (packet.action) {
                     ConvertAction.REPLACE -> {
-                        // Put back in same slot if possible, otherwise to inventory
-                        if (slot.mayPlace(result)) {
+                        var remaining = totalOutput
+                        val slotMax = minOf(slot.maxStackSize, packet.target.maxStackSize).coerceAtLeast(1)
+                        if (slot.mayPlace(packet.target)) {
                             if (slot.item.isEmpty) {
-                                slot.set(result)
-                            } else if (ItemStack.isSameItemSameTags(slot.item, result)) {
-                                slot.item.grow(result.count)
-                            } else {
-                                // Slot has different item now, fallback to inventory
-                                if (!player.inventory.add(result)) {
-                                    player.drop(result, false)
+                                val toSlot = minOf(remaining, slotMax.toLong()).toInt()
+                                if (toSlot > 0) {
+                                    slot.set(packet.target.copyWithCount(toSlot))
+                                    remaining -= toSlot.toLong()
+                                }
+                            } else if (ItemStack.isSameItemSameTags(slot.item, packet.target)) {
+                                val space = slotMax - slot.item.count
+                                if (space > 0) {
+                                    val toSlot = minOf(remaining, space.toLong()).toInt()
+                                    slot.item.grow(toSlot)
+                                    remaining -= toSlot.toLong()
                                 }
                             }
-                        } else {
-                            if (!player.inventory.add(result)) {
-                                player.drop(result, false)
-                            }
+                        }
+                        if (remaining > 0) {
+                            remaining = addToContainerSlots(container, slot, packet.target, remaining)
+                        }
+                        if (remaining > 0) {
+                            addToInventoryOrDrop(player, packet.target, remaining)
                         }
                         // Play conversion sound
                         player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                     }
                     ConvertAction.TO_INVENTORY -> {
-                        if (!player.inventory.add(result)) {
-                            player.drop(result, false)
-                        }
+                        addToInventoryOrDrop(player, packet.target, totalOutput)
                         // Play conversion + pickup sound
                         player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                         player.level().playSound(null, player.blockPosition(), SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.2f, ((player.random.nextFloat() - player.random.nextFloat()) * 0.7f + 1.0f) * 2.0f)
                     }
                     ConvertAction.DROP -> {
-                        player.drop(result, false)
+                        dropStacks(player, packet.target, totalOutput)
                         // Play conversion sound
                         player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                     }
@@ -108,5 +117,76 @@ data class C2SConvertItemPacket(
         }.onFailure {
             ItemConverter.LOGGER.error("Error handling C2SConvertItemPacket", it)
         }
+    }
+}
+
+internal fun addToContainerSlots(
+    container: AbstractContainerMenu,
+    sourceSlot: Slot,
+    template: ItemStack,
+    totalCount: Long
+): Long {
+    var remaining = totalCount
+    if (remaining <= 0) return 0
+
+    var slots = container.slots.filter { it.container == sourceSlot.container && it != sourceSlot }
+    if (sourceSlot.container is Inventory) {
+        val inventory = sourceSlot.container as Inventory
+        slots = slots.filter { it.index < inventory.items.size }
+    }
+
+    for (slot in slots) {
+        if (remaining <= 0) break
+        val existing = slot.item
+        if (existing.isEmpty) continue
+        if (!ItemStack.isSameItemSameTags(existing, template)) continue
+        if (!slot.mayPlace(template)) continue
+
+        val slotMax = minOf(slot.maxStackSize, template.maxStackSize).coerceAtLeast(1)
+        val space = slotMax - existing.count
+        if (space <= 0) continue
+        val toAdd = minOf(remaining, space.toLong()).toInt()
+        existing.grow(toAdd)
+        remaining -= toAdd.toLong()
+    }
+
+    for (slot in slots) {
+        if (remaining <= 0) break
+        if (!slot.item.isEmpty) continue
+        if (!slot.mayPlace(template)) continue
+
+        val slotMax = minOf(slot.maxStackSize, template.maxStackSize).coerceAtLeast(1)
+        val toAdd = minOf(remaining, slotMax.toLong()).toInt()
+        if (toAdd <= 0) continue
+        slot.set(template.copyWithCount(toAdd))
+        remaining -= toAdd.toLong()
+    }
+
+    return remaining
+}
+
+internal fun addToInventoryOrDrop(player: ServerPlayer, template: ItemStack, totalCount: Long) {
+    var remaining = totalCount
+    val maxStack = template.maxStackSize.coerceAtLeast(1)
+
+    while (remaining > 0) {
+        val toAdd = minOf(remaining, maxStack.toLong()).toInt()
+        val stack = template.copyWithCount(toAdd)
+        if (!player.inventory.add(stack)) {
+            player.drop(stack, false)
+        }
+        remaining -= toAdd.toLong()
+    }
+}
+
+internal fun dropStacks(player: ServerPlayer, template: ItemStack, totalCount: Long) {
+    var remaining = totalCount
+    val maxStack = template.maxStackSize.coerceAtLeast(1)
+
+    while (remaining > 0) {
+        val toDrop = minOf(remaining, maxStack.toLong()).toInt()
+        val stack = template.copyWithCount(toDrop)
+        player.drop(stack, false)
+        remaining -= toDrop.toLong()
     }
 }
