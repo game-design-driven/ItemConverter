@@ -1,0 +1,47 @@
+# Copy this file to .github/workflows/release.yaml in your mod repo
+# Then run: uv run setup.py (from mod-release-workflow repo)
+
+name: Release
+concurrency: release-pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      manual_bump:
+        description: 'Override bump (patch, minor, major)'
+        default: 'patch'
+        type: choice
+        options: [patch, minor, major]
+
+jobs:
+  release:
+    uses: game-design-driven/mod-release-workflow/.github/workflows/mod-release.yaml@main
+    with:
+      # Required - build config
+      loader: "forge"  # forge, fabric, neoforge, quilt
+      mc_version: "1.20.1"
+      java_version: "17"
+
+      # Optional - platform publishing (set IDs via repo vars or here)
+      modrinth_id: ${{ vars.MODRINTH_ID }}
+      curseforge_id: ${{ vars.CF_ID }}
+
+      # Optional - packwiz slugs for modpack sync (defaults to repo name lowercase)
+      modrinth_slug: ${{ vars.MODRINTH_SLUG }}
+      curseforge_slug: ${{ vars.CF_SLUG }}
+
+      # Optional - modpack downstream PR
+      target_modpack_repo: ${{ vars.TARGET_MODPACK_REPO }}
+      enable_modrinth_sync: ${{ vars.ENABLE_MODRINTH_SYNC == 'true' }}
+      enable_curseforge_sync: ${{ vars.ENABLE_CURSEFORGE_SYNC == 'true' }}
+      curseforge_modpack_path: "./curseforge"
+
+      # Bump type (from workflow_dispatch or default)
+      manual_bump: ${{ inputs.manual_bump || 'patch' }}
+    secrets:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+      CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
