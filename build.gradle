@@ -1,0 +1,136 @@
+plugins {
+    id "net.neoforged.moddev.legacyforge"
+    id "maven-publish"
+    id 'com.palantir.git-version' version '3.1.0'
+    id 'org.jetbrains.kotlin.jvm' version '2.1.21'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '2.1.21'
+}
+
+version = gitVersion()
+group = mod_group
+archivesBaseName = archive_name
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    maven {
+        name = "ModMaven"
+        url = "https://modmaven.dev/"
+    }
+    maven {
+        name = "Modrinth"
+        url = "https://api.modrinth.com/maven"
+        content {
+            includeGroup "maven.modrinth"
+        }
+    }
+    maven {
+        name = "CurseMaven"
+        url = "https://cursemaven.com"
+        content {
+            includeGroup "curse.maven"
+        }
+    }
+    maven {
+        name = "Kotlin for Forge"
+        url = "https://thedarkcolour.github.io/KotlinForForge/"
+        content {
+            includeGroup "thedarkcolour"
+        }
+    }
+    maven {
+        name = "Nucleoid"
+        url = "https://maven.nucleoid.xyz/"
+        content {
+            includeGroup "xyz.nucleoid"
+        }
+    }
+    maven {
+        name = "SpongePowered"
+        url = "https://repo.spongepowered.org/repository/maven-public/"
+    }
+}
+
+dependencies {
+    // Kotlin
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.21"
+    implementation "thedarkcolour:kotlinforforge:4.12.0"
+
+    // Mixin
+    annotationProcessor "org.spongepowered:mixin:0.8.7:processor"
+    implementation "io.github.llamalad7:mixinextras-common:0.5.0-beta.4"
+
+    // Applied Energistics 2 (optional compat)
+    compileOnly "maven.modrinth:ae2:7KVs6HMQ" // 15.4.10
+    runtimeOnly "maven.modrinth:ae2:7KVs6HMQ"
+    compileOnly "maven.modrinth:guideme:9YGnKYDF" // 20.1.14 (required by AE2)
+    runtimeOnly "maven.modrinth:guideme:9YGnKYDF"
+
+    // macOS ARM native bridge for dev environment
+    if (System.getProperty("os.name").contains("Mac")) {
+        runtimeOnly "ca.weblite:java-objc-bridge:1.1"
+    }
+}
+
+kotlin {
+    jvmToolchain(17)
+}
+
+legacyForge {
+    version = "${minecraft_version}-${forge_version}"
+
+    mods {
+        "${id}" {
+            sourceSet sourceSets.main
+        }
+    }
+
+    runs {
+        configureEach {
+            gameDirectory = project.file('run')
+        }
+        client {
+            client()
+        }
+        server {
+            server()
+        }
+    }
+}
+
+processResources {
+    def props = [
+        "id": project.property("id"),
+        "name": project.property("name"),
+        "version": version.toString(),
+        "group": project.group.toString(),
+        "description": project.property("description"),
+        "source": project.property("source"),
+        "minecraft_version_range": minecraft_version_range,
+        "forge_version_range": forge_version_range
+    ]
+
+    inputs.properties(props)
+
+    filesMatching(["META-INF/mods.toml", "*.mixins.json", "META-INF/MANIFEST.MF"]) {
+        expand props
+    }
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+jar {
+    manifest {
+        attributes([
+            'MixinConfigs': 'item_converter.mixins.json'
+        ])
+    }
+}
