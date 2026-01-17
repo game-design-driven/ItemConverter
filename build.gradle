@@ -74,7 +74,7 @@ dependencies {
 
     // macOS ARM native bridge for dev environment
     if (System.getProperty("os.name").contains("Mac")) {
-        runtimeOnly "ca.weblite:java-objc-bridge:1.1"
+        runtimeOnly "ca.weblite:java-objc-bridge:1.2"
     }
 }
 
