@@ -45,3 +45,5 @@ jobs:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
       MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
       CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+
+      
