@@ -7,24 +7,46 @@ license='CC-BY-SA'
 displayURL='${source}'
 
 [[mods]]
-modId="${id}"
+modId="item-converter"
 version="${version}"
 displayName="${name}"
-authors="SettingDust"
+authors="SettingDust,Yarden-zamir"
 description='''
 ${description}
 '''
 
-[[dependencies.${id}]]
+[[dependencies.item-converter]]
 modId="forge"
 mandatory=true
 versionRange="${forge_version_range}"
 ordering="NONE"
 side="BOTH"
 
-[[dependencies.${id}]]
+[[dependencies.item-converter]]
 modId="minecraft"
 mandatory=true
 versionRange="${minecraft_version_range}"
 ordering="NONE"
 side="BOTH"
+
+[[dependencies.item-converter]]
+modId="kotlin-for-forge"
+mandatory=true
+versionRange="[4.12.0,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.item-converter]]
+modId="ae2"
+mandatory=true
+versionRange="[15.4.10,)"
+ordering="AFTER"
+side="BOTH"
+
+[mc-publish]
+modrinth = "9pniJAtk"
+curseforge = 1143473
+loader = "forge"
+mc_version = "1.20.1"
+modrinth_slug = "item-converter"
+curseforge_slug = "itemconverter"

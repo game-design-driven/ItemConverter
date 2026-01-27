@@ -20,18 +20,9 @@ jobs:
   release:
     uses: game-design-driven/mod-release-workflow/.github/workflows/mod-release.yaml@main
     with:
-      # Required - build config
-      loader: "forge"  # forge, fabric, neoforge, quilt
-      mc_version: "1.20.1"
+      # Required - mods.toml must define [mc-publish] keys
+      # modrinth, curseforge, loader, mc_version, modrinth_slug, curseforge_slug
       java_version: "17"
-
-      # Optional - platform publishing (set IDs via repo vars or here)
-      modrinth_id: ${{ vars.MODRINTH_ID }}
-      curseforge_id: ${{ vars.CF_ID }}
-
-      # Optional - packwiz slugs for modpack sync (defaults to repo name lowercase)
-      modrinth_slug: ${{ vars.MODRINTH_SLUG }}
-      curseforge_slug: ${{ vars.CF_SLUG }}
 
       # Optional - modpack downstream PR
       target_modpack_repo: ${{ vars.TARGET_MODPACK_REPO }}
@@ -45,5 +36,3 @@ jobs:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
       MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
       CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
-
-      
