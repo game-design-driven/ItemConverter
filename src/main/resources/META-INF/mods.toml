@@ -30,7 +30,7 @@ ordering="NONE"
 side="BOTH"
 
 [[dependencies.item_converter]]
-modId="kotlin-for-forge"
+modId="kotlinforforge"
 mandatory=true
 versionRange="[4.12.0,)"
 ordering="AFTER"
