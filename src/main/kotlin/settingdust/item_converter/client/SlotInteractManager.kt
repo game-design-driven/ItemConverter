@@ -8,6 +8,8 @@ import net.minecraft.client.gui.GuiComponent
 import net.minecraft.client.gui.components.Widget
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import net.minecraft.resources.ResourceLocation
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.phys.BlockHitResult
 import net.minecraft.world.phys.HitResult
 import net.minecraftforge.api.distmarker.Dist
 import net.minecraftforge.api.distmarker.OnlyIn
@@ -20,7 +22,11 @@ import net.minecraftforge.client.gui.overlay.ForgeGui
 import net.minecraftforge.client.gui.overlay.GuiOverlayManager
 import net.minecraftforge.client.gui.overlay.IGuiOverlay
 import net.minecraftforge.event.TickEvent
+import org.apache.commons.lang3.math.Fraction
+import org.jgrapht.alg.shortestpath.DijkstraShortestPath
 import settingdust.item_converter.ClientConfig
+import settingdust.item_converter.ConvertRules
+import settingdust.item_converter.SimpleItemPredicate
 import settingdust.item_converter.networking.C2SConvertTargetPacket
 import settingdust.item_converter.networking.Networking
 import thedarkcolour.kotlinforforge.forge.FORGE_BUS
@@ -135,7 +141,17 @@ object SlotInteractManager {
                     val minecraft = Minecraft.getInstance()
                     val player = minecraft.player ?: return@addListener
                     if (minecraft.screen != null) return@addListener
-                    if (minecraft.hitResult?.type != HitResult.Type.BLOCK) return@addListener
+                    val hitResult = minecraft.hitResult
+                    if (hitResult?.type != HitResult.Type.BLOCK) return@addListener
+                    val blockHitResult = hitResult as BlockHitResult
+                    val level = minecraft.level ?: return@addListener
+                    val target =
+                        level.getBlockState(blockHitResult.blockPos)
+                            .getCloneItemStack(blockHitResult, level, blockHitResult.blockPos, player)
+                    if (target.isEmpty) return@addListener
+                    val targetPredicate = SimpleItemPredicate(target)
+                    if (targetPredicate !in ConvertRules.graph.vertexSet()) return@addListener
+                    if (!canConvertTargetFromInventory(targetPredicate, target, player.inventory.items)) return@addListener
                     val sneaking = player.isCrouching
                     if (player.abilities.instabuild && !sneaking) return@addListener
                     event.isCanceled = true
@@ -143,6 +159,26 @@ object SlotInteractManager {
                 }
             }
         }
+    }
+
+    private fun canConvertTargetFromInventory(
+        targetPredicate: SimpleItemPredicate,
+        target: ItemStack,
+        inventoryItems: List<ItemStack>
+    ): Boolean {
+        return inventoryItems.asSequence()
+            .filter { !it.isEmpty }
+            .filter { !ItemStack.isSameItemSameTags(it, target) }
+            .map { SimpleItemPredicate(it) }
+            .filter { it in ConvertRules.graph.vertexSet() }
+            .mapNotNull { from ->
+                DijkstraShortestPath.findPathBetween(ConvertRules.graph, from, targetPredicate)
+                    ?.let { path -> from to path }
+            }
+            .any { (from, path) ->
+                val ratio = path.edgeList.fold(Fraction.ONE) { acc, edge -> edge.fraction.multiplyBy(acc) }
+                from.predicate.count >= ratio.denominator
+            }
     }
 }
 
