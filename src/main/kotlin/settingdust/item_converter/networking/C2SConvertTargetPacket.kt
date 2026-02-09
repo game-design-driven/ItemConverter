@@ -160,14 +160,19 @@ object C2SConvertTargetPacket {
                         player.inventory.setItem(existIndex, selected)
                     } else {
                         removeMaterials()
-                        var slotToInsert = player.inventory.getSlotWithRemainingSpace(itemToInsert)
-                        if (slotToInsert == -1) slotToInsert = player.inventory.freeSlot
-                        if (slotToInsert in 0..8) {
-                            player.inventory.selected = slotToInsert
-                            player.connection.send(ClientboundSetCarriedItemPacket(player.inventory.selected));
+                        val selectedIndex = player.inventory.selected
+                        val selectedStack = player.inventory.getItem(selectedIndex)
+                        if (!selectedStack.isEmpty && !ItemStack.isSameItemSameTags(selectedStack, itemToInsert)) {
+                            val selectedCopy = selectedStack.copy()
+                            player.inventory.setItem(selectedIndex, ItemStack.EMPTY)
+                            if (!player.inventory.add(selectedCopy)) {
+                                player.drop(selectedCopy, true)
+                            }
                         }
-                        if (!player.inventory.add(itemToInsert)) {
-                            player.drop(itemToInsert, true)
+                        if (!player.inventory.add(selectedIndex, itemToInsert)) {
+                            if (!player.inventory.add(itemToInsert)) {
+                                player.drop(itemToInsert, true)
+                            }
                         }
                     }
                 }
