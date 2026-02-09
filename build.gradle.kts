@@ -22,7 +22,7 @@ val source: String by rootProject.properties
 group = "settingdust.item_converter"
 
 val gitVersion: Closure<String> by extra
-version = gitVersion()
+version = findProperty("buildVersion")?.toString() ?: gitVersion()
 
 base {
     archivesName = archive_name
@@ -40,6 +40,11 @@ java {
 }
 
 repositories {
+    maven {
+        name = "local-shims"
+        url = uri("$rootDir/local-maven")
+    }
+
     unimined.curseMaven()
     unimined.modrinthMaven()
 

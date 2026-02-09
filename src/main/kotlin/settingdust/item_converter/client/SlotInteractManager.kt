@@ -8,6 +8,7 @@ import net.minecraft.client.gui.GuiComponent
 import net.minecraft.client.gui.components.Widget
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import net.minecraft.resources.ResourceLocation
+import net.minecraft.world.phys.HitResult
 import net.minecraftforge.api.distmarker.Dist
 import net.minecraftforge.api.distmarker.OnlyIn
 import net.minecraftforge.client.event.InputEvent
@@ -133,6 +134,8 @@ object SlotInteractManager {
                 event.isPickBlock -> {
                     val minecraft = Minecraft.getInstance()
                     val player = minecraft.player ?: return@addListener
+                    if (minecraft.screen != null) return@addListener
+                    if (minecraft.hitResult?.type != HitResult.Type.BLOCK) return@addListener
                     val sneaking = player.isCrouching
                     if (player.abilities.instabuild && !sneaking) return@addListener
                     event.isCanceled = true
