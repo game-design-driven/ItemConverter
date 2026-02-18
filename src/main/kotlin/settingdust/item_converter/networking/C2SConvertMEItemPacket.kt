@@ -17,7 +17,7 @@ import java.util.function.Supplier
 data class C2SConvertMEItemPacket(
     val input: ItemStack,
     val target: ItemStack,
-    val count: Int,  // -1 = all available, otherwise specific count
+    val count: Int,  // -1 = bulk (action-dependent), otherwise specific input count
     val action: ConvertAction
 ) {
     companion object {
@@ -38,20 +38,31 @@ data class C2SConvertMEItemPacket(
                 val menu = player.containerMenu
 
                 if (menu !is MEStorageMenu) return@enqueueWork
+                if (packet.count != 1 && packet.count != BULK_COUNT) return@enqueueWork
 
                 val recipeManager = player.level().recipeManager
-                if (!RecipeHelper.isValidConversion(recipeManager, packet.input, packet.target)) {
-                    return@enqueueWork
-                }
+                val conversionTarget = RecipeHelper.findConversionTarget(recipeManager, packet.input, packet.target)
+                    ?: return@enqueueWork
+                val targetTemplate = conversionTarget.output.copy()
 
                 val storage = menu.host.inventory ?: return@enqueueWork
                 val inputKey = AEItemKey.of(packet.input)
-                val targetKey = AEItemKey.of(packet.target)
+                val targetKey = AEItemKey.of(targetTemplate)
+                val outputPerInput = targetTemplate.count.coerceAtLeast(1)
 
                 // Determine how many to convert
                 val available = storage.extract(inputKey, Long.MAX_VALUE, appeng.api.config.Actionable.SIMULATE, menu.actionSource)
-                val convertCount = if (packet.count == -1) available else minOf(packet.count.toLong(), available)
+                val convertCount = when {
+                    packet.count != BULK_COUNT -> minOf(packet.count.toLong(), available)
+                    packet.action == ConvertAction.REPLACE -> available
+                    else -> resolveBulkInputCountForSingleOutputStack(
+                        available,
+                        outputPerInput,
+                        targetTemplate.maxStackSize
+                    )
+                }
                 if (convertCount <= 0) return@enqueueWork
+                if (convertCount > Long.MAX_VALUE / outputPerInput.toLong()) return@enqueueWork
 
                 // Extract input items
                 val extracted = storage.extract(inputKey, convertCount, appeng.api.config.Actionable.MODULATE, menu.actionSource)
@@ -64,8 +75,7 @@ data class C2SConvertMEItemPacket(
                 }
 
                 // 1:N recipe support - multiply by recipe output count
-                val outputPerInput = packet.target.count
-                val totalOutput = convertCount * outputPerInput
+                val totalOutput = convertCount * outputPerInput.toLong()
 
                 when (packet.action) {
                     ConvertAction.REPLACE -> {
@@ -73,19 +83,19 @@ data class C2SConvertMEItemPacket(
                         val inserted = storage.insert(targetKey, totalOutput, appeng.api.config.Actionable.MODULATE, menu.actionSource)
                         val remainder = totalOutput - inserted
                         if (remainder > 0) {
-                            addToInventoryOrDrop(player, packet.target, remainder)
+                            addToInventoryOrDrop(player, targetTemplate, remainder)
                         }
                         player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                     }
                     ConvertAction.TO_INVENTORY -> {
                         // Give to player inventory
-                        addToInventoryOrDrop(player, packet.target, totalOutput)
+                        addToInventoryOrDrop(player, targetTemplate, totalOutput)
                         player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                         player.level().playSound(null, player.blockPosition(), SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.2f, ((player.random.nextFloat() - player.random.nextFloat()) * 0.7f + 1.0f) * 2.0f)
                     }
                     ConvertAction.DROP -> {
                         // Drop into world
-                        dropStacks(player, packet.target, totalOutput)
+                        dropStacks(player, targetTemplate, totalOutput)
                         player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                     }
                 }

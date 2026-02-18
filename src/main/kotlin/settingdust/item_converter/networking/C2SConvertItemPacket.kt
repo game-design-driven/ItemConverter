@@ -26,7 +26,7 @@ enum class ConvertAction {
 data class C2SConvertItemPacket(
     val slot: Int,
     val target: ItemStack,
-    val count: Int,  // -1 = all, otherwise specific count
+    val count: Int,  // -1 = bulk (single output stack), otherwise specific input count
     val action: ConvertAction
 ) {
     companion object {
@@ -45,6 +45,8 @@ data class C2SConvertItemPacket(
             context.get().enqueueWork {
                 val player = context.get().sender ?: return@enqueueWork
                 val container = player.containerMenu ?: return@enqueueWork
+                if (packet.slot !in container.slots.indices) return@enqueueWork
+                if (packet.count != 1 && packet.count != BULK_COUNT) return@enqueueWork
 
                 val slot = container.getSlot(packet.slot)
                 val fromItem = slot.item
@@ -53,34 +55,43 @@ data class C2SConvertItemPacket(
 
                 val recipeManager = player.level().recipeManager
 
-                if (!RecipeHelper.isValidConversion(recipeManager, fromItem, packet.target)) {
-                    return@enqueueWork
-                }
+                val conversionTarget = RecipeHelper.findConversionTarget(recipeManager, fromItem, packet.target)
+                    ?: return@enqueueWork
+                val targetTemplate = conversionTarget.output.copy()
+                val outputPerInput = targetTemplate.count.coerceAtLeast(1)
 
                 // Calculate how many to convert
-                val convertCount = if (packet.count == -1) fromItem.count else minOf(packet.count, fromItem.count)
-                if (convertCount <= 0) return@enqueueWork
+                val requestedCount = if (packet.count == BULK_COUNT) {
+                    resolveBulkInputCountForSingleOutputStack(
+                        fromItem.count,
+                        outputPerInput,
+                        targetTemplate.maxStackSize
+                    )
+                } else {
+                    minOf(packet.count, fromItem.count)
+                }
+                if (requestedCount <= 0) return@enqueueWork
 
-                // Remove input items
-                slot.safeTake(convertCount, convertCount, player)
+                // Remove input items and only grant output for actually removed count.
+                val removedCount = slot.safeTake(requestedCount, requestedCount, player).count
+                if (removedCount <= 0) return@enqueueWork
 
                 // Create output (1:N recipe support - multiply by recipe output count)
-                val outputPerInput = packet.target.count
-                val totalOutput = convertCount.toLong() * outputPerInput.toLong()
+                val totalOutput = removedCount.toLong() * outputPerInput.toLong()
                 if (totalOutput <= 0) return@enqueueWork
 
                 when (packet.action) {
                     ConvertAction.REPLACE -> {
                         var remaining = totalOutput
-                        val slotMax = minOf(slot.maxStackSize, packet.target.maxStackSize).coerceAtLeast(1)
-                        if (slot.mayPlace(packet.target)) {
+                        val slotMax = minOf(slot.maxStackSize, targetTemplate.maxStackSize).coerceAtLeast(1)
+                        if (slot.mayPlace(targetTemplate)) {
                             if (slot.item.isEmpty) {
                                 val toSlot = minOf(remaining, slotMax.toLong()).toInt()
                                 if (toSlot > 0) {
-                                    slot.set(packet.target.copyWithCount(toSlot))
+                                    slot.set(targetTemplate.copyWithCount(toSlot))
                                     remaining -= toSlot.toLong()
                                 }
-                            } else if (ItemStack.isSameItemSameTags(slot.item, packet.target)) {
+                            } else if (ItemStack.isSameItemSameTags(slot.item, targetTemplate)) {
                                 val space = slotMax - slot.item.count
                                 if (space > 0) {
                                     val toSlot = minOf(remaining, space.toLong()).toInt()
@@ -90,22 +101,22 @@ data class C2SConvertItemPacket(
                             }
                         }
                         if (remaining > 0) {
-                            remaining = addToContainerSlots(container, slot, packet.target, remaining)
+                            remaining = addToContainerSlots(container, slot, targetTemplate, remaining)
                         }
                         if (remaining > 0) {
-                            addToInventoryOrDrop(player, packet.target, remaining)
+                            addToInventoryOrDrop(player, targetTemplate, remaining)
                         }
                         // Play conversion sound
                         player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                     }
                     ConvertAction.TO_INVENTORY -> {
-                        addToInventoryOrDrop(player, packet.target, totalOutput)
+                        addToInventoryOrDrop(player, targetTemplate, totalOutput)
                         // Play conversion + pickup sound
                         player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                         player.level().playSound(null, player.blockPosition(), SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.2f, ((player.random.nextFloat() - player.random.nextFloat()) * 0.7f + 1.0f) * 2.0f)
                     }
                     ConvertAction.DROP -> {
-                        dropStacks(player, packet.target, totalOutput)
+                        dropStacks(player, targetTemplate, totalOutput)
                         // Play conversion sound
                         player.level().playSound(null, player.blockPosition(), SoundEvents.UI_STONECUTTER_SELECT_RECIPE, SoundSource.PLAYERS, 1.0f, 1.0f)
                     }

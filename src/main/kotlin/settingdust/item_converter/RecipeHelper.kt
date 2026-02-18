@@ -154,9 +154,17 @@ object RecipeHelper {
         return false
     }
 
-    fun isValidConversion(recipeManager: RecipeManager, input: ItemStack, target: ItemStack): Boolean {
-        return getConversions(recipeManager, input).any {
+    /**
+     * Resolve target using server-side recipe data so packet-provided stack counts are not trusted.
+     */
+    fun findConversionTarget(recipeManager: RecipeManager, input: ItemStack, target: ItemStack): ConversionTarget? {
+        if (input.isEmpty || target.isEmpty) return null
+        return getConversions(recipeManager, input).firstOrNull {
             ItemStack.isSameItemSameTags(it.output, target)
         }
+    }
+
+    fun isValidConversion(recipeManager: RecipeManager, input: ItemStack, target: ItemStack): Boolean {
+        return findConversionTarget(recipeManager, input, target) != null
     }
 }
