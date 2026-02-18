@@ -1,3 +1,4 @@
+[![Discord](https://img.shields.io/discord/890222432605057044?label=Chat+on+Discord)](https://discord.gg/v8cZ83kTPY)
 # Item Converter
 
 Convert items directly from your inventory/container/me system using recipe types.
