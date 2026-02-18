@@ -1,150 +1,156 @@
 # AGENTS.md
 
 ## Scope
-- Applies to the entire repository.
-- No nested AGENTS.md files exist.
+- Applies to the entire repository at `/Users/kcw/GitHub/ItemConverter`.
+- No nested `AGENTS.md` files are present.
+- This project is a Kotlin-based Minecraft mod for Forge 1.20.1.
 
-## Build, Test, Lint (Gradle)
-- Use the Gradle wrapper: `./gradlew`.
-- Build: `./gradlew build`.
-- Assemble only: `./gradlew assemble`.
-- Clean: `./gradlew clean`.
-- Run checks: `./gradlew check`.
-- Unit tests: `./gradlew test` (no `src/test` currently).
-- Single test class: `./gradlew test --tests "package.ClassName"`.
-- Single test method: `./gradlew test --tests "package.ClassName.methodName"`.
-- Inspect available tasks: `./gradlew tasks`.
-- Lint: no dedicated lint task configured in `build.gradle.kts`.
-
-## Project Stack
-- Language: Kotlin (JVM) with Java toolchain 17.
-- Build system: Gradle Kotlin DSL.
-- Minecraft Forge mod using Unimined + KotlinForForge.
+## Project Snapshot
+- Build system: Gradle (Groovy DSL) via wrapper `./gradlew`.
+- Language/runtime: Kotlin + Java toolchain 17.
+- Core plugin: `net.neoforged.moddev.legacyforge`.
 - Serialization: `kotlinx.serialization`.
-- Logging: Log4j via `LogManager.getLogger()`.
+- Mod ID constant: `item_converter`.
+- Root package: `settingdust.item_converter`.
+
+## Build, Lint, and Test Commands
+- Always use the wrapper: `./gradlew <task>`.
+- Build everything: `./gradlew build`.
+- Assemble jars only: `./gradlew assemble`.
+- Run verification tasks: `./gradlew check`.
+- Clean outputs: `./gradlew clean`.
+- Compile main Kotlin only: `./gradlew compileKotlin`.
+- Compile test Kotlin only: `./gradlew compileTestKotlin`.
+- Run all tests: `./gradlew test`.
+- Run a single test class: `./gradlew test --tests "package.ClassName"`.
+- Run a single test method: `./gradlew test --tests "package.ClassName.methodName"`.
+- Run tests by wildcard: `./gradlew test --tests "*ClassName*"`.
+- Show available tasks: `./gradlew tasks --all`.
+- Print computed mod version: `./gradlew printVersion`.
+
+## Lint/Static Analysis Status
+- No dedicated lint task is configured (`ktlint`, `detekt`, `spotless` are not present).
+- Use `./gradlew check` as the baseline verification command.
+- Treat Kotlin compiler warnings and Gradle warnings as actionable.
+
+## Run Configurations
+- Start client dev runtime: `./gradlew runClient`.
+- Start server dev runtime: `./gradlew runServer`.
+- Prepare client run assets/classpath: `./gradlew prepareClientRun`.
+- Prepare server run assets/classpath: `./gradlew prepareServerRun`.
 
 ## Source Layout
-- Kotlin sources: `src/main/kotlin`.
-- Package root: `settingdust.item_converter`.
-- Client-only code under `settingdust.item_converter.client`.
-- Network packets under `settingdust.item_converter.networking`.
-- Compat integrations under `settingdust.item_converter.compat`.
-- Resources under `src/main/resources`.
+- Main Kotlin sources: `src/main/kotlin`.
+- Resources: `src/main/resources`.
+- Entrypoint object: `settingdust.item_converter.ItemConverter`.
+- Client-only code: `settingdust.item_converter.client`.
+- Networking packets/channel: `settingdust.item_converter.networking`.
+- AE2 compatibility: `settingdust.item_converter.compat.ae2`.
 
-## Kotlin Formatting
-- Indentation: 4 spaces.
-- Braces on the same line as declarations.
-- Blank lines between logical blocks and functions.
-- Multi-line argument lists place one argument per line.
-- Align closing parens with the start of the call.
-- Use trailing commas only if already present nearby.
-- Prefer KDoc (`/** */`) for public or complex APIs.
+## Formatting Conventions
+- Use 4-space indentation; no tabs.
+- Keep braces on the same line for declarations and control blocks.
+- Use blank lines between logical blocks, not between every statement.
+- Prefer short expression bodies for trivial functions.
+- Wrap long argument lists one argument per line.
+- Keep trailing commas consistent with nearby code.
+- Keep line length reasonable; wrap before readability drops.
 
-## Imports
-- No wildcard imports.
-- Use IntelliJ/Kotlin default ordering.
-- Group imports by package origin without extra spacing unless existing style requires it.
-- Keep `settingdust.*` imports after external libraries.
+## Import Conventions
+- Do not use wildcard imports.
+- Keep imports explicit and minimal.
+- Remove unused imports.
+- Follow IDE-default Kotlin ordering.
+- Keep internal project imports (`settingdust.*`) consistent with existing style.
 
-## Naming
-- Packages: lowercase with underscores (e.g., `settingdust.item_converter`).
-- Classes/objects: `PascalCase`.
-- Functions/fields: `camelCase`.
-- Boolean fields: `isX`, `hasX`, or `allowX`.
-- Constants: `UPPER_SNAKE_CASE` with `const val`.
-- File names match the primary class/object.
+## Naming Conventions
+- Packages: lowercase, underscore-separated where already used.
+- Classes/objects/enums: `PascalCase`.
+- Functions/properties: `camelCase`.
+- Constants: `UPPER_SNAKE_CASE` with `const val` when possible.
+- Boolean names: `isX`, `hasX`, `allowX`, `shouldX`.
+- Files should match primary type or feature area.
 
 ## Types and Nullability
-- Prefer `val` over `var` for immutability.
-- Use explicit types for public API surfaces and complex generics.
-- Use Kotlin nullability (`?`) instead of sentinel values.
-- Prefer safe calls (`?.`) and `let` over `!!`.
-- Use `!!` only when upstream guarantees non-null.
-- Favor early returns for invalid state.
+- Prefer `val` over `var` unless mutation is required.
+- Add explicit types for public APIs and non-obvious generics.
+- Use nullable types (`T?`) instead of sentinel values.
+- Prefer safe calls (`?.`) and guarded `if` checks over `!!`.
+- Use early returns for invalid state.
+- For count multiplication (`count * outputCount`), use `Long` to avoid overflow.
 
-## Error Handling
-- Use `runCatching {}` or early returns for recoverable IO issues.
-- Avoid throwing exceptions for control flow.
-- Log unexpected states via `ItemConverter.LOGGER` when needed.
-- Keep network handlers defensive: validate packet contents before use.
+## Error Handling and Logging
+- Use `runCatching` for recoverable file/network packet paths.
+- Do not use exceptions for normal control flow.
+- Log unexpected failures via `ItemConverter.LOGGER`.
+- Keep failure logs specific (context + operation).
+- In packet handlers, validate all prerequisites before mutating state.
 
-## Configuration & Serialization
-- `ClientConfig` and `CommonConfig` are `@Serializable` data classes.
-- Config JSON is stored in the Forge config dir via `FMLPaths.CONFIGDIR`.
-- Keep defaults in data class constructors.
-- Call `json.encodeToStream` after updates to persist changes.
-- Prefer `Json { encodeDefaults = true; prettyPrint = true; ignoreUnknownKeys = true }`.
+## Networking Rules
+- Register packets in `Networking` with stable numeric IDs.
+- Keep channel version (`VERSION`) changes intentional and coordinated.
+- Keep serialization codec and runtime packet fields in sync.
+- Packet handlers must:
+  - enqueue server work,
+  - validate sender/container/slot/item,
+  - validate conversion targets,
+  - mark packet handled,
+  - broadcast container changes after mutation.
+- Preserve current action semantics: `REPLACE`, `TO_INVENTORY`, `DROP`.
 
-## Networking
-- Packet registration lives in `settingdust.item_converter.networking.Networking`.
-- Channel version is a simple string (`VERSION = "1"`).
-- Use codecs for packet serialization.
-- Keep packet IDs stable and sequential.
+## Client/Server Boundaries
+- Annotate client-only classes/objects with `@OnlyIn(Dist.CLIENT)`.
+- Guard client init using `FMLEnvironment.dist == Dist.CLIENT`.
+- Keep shared gameplay logic outside client-only packages.
+- Keep AE2 class usage behind mod-loaded checks in compat code.
 
-## Client vs Server
-- Annotate client-only types with `@OnlyIn(Dist.CLIENT)`.
-- Guard client initialization with `if (FMLEnvironment.dist == Dist.CLIENT)`.
-- Keep server logic out of `client` package.
+## Config and Serialization
+- Config models are `@Serializable` data classes.
+- Keep defaults in constructor parameters.
+- Keep config files under `FMLPaths.CONFIGDIR`.
+- Ensure config files exist before decode; initialize with `{}` when missing.
+- Use shared JSON options:
+  - `encodeDefaults = true`,
+  - `prettyPrint = true`,
+  - `ignoreUnknownKeys = true`.
+- Persist changes with `json.encodeToStream`.
+- Preserve compatibility by adding new fields with defaults.
 
-## UI/Screen Code
-- Calculate layout values from constants (slot size, border).
-- Use `coerceIn` for screen bounds.
-- Keep UI state fields private.
-- Avoid heavy allocations per frame.
+## UI and Rendering Conventions
+- Derive layout sizes from constants (`BORDER`, `SLOT_SIZE`, texture dims).
+- Clamp positions with `coerceIn` against screen bounds.
+- Keep render-loop logic allocation-light.
+- Validate hovered slot/item before acting.
+- Close conversion screens if the source item changes.
+- Keep conversion input snapshot immutable per screen instance.
 
-## Collections and Iteration
-- Use Kotlin collection builders (`mutableListOf`, `mutableSetOf`).
-- Prefer `for` loops when avoiding extra allocations.
-- Use `sortedWith(compareBy(...))` for multi-key sorting.
-- Avoid repeated registry lookups inside hot loops when possible.
+## Conversion Domain Rules
+- Reject empty input stacks early.
+- Only allow recipe types configured in `CommonConfig`.
+- Preserve 1:N conversion output counts.
+- Use special-tag prioritization rules when ordering targets.
+- Compare item + components/tags for conversion validity.
+- Avoid duplicate outputs; deduplicate by stable key.
 
-## Resource Locations and IDs
-- Use `ItemConverter.id(path)` to build `ResourceLocation`s.
-- Keep IDs lowercase and namespaced.
+## Dependency and Build File Rules
+- Do not add dependencies without clear, immediate need.
+- Keep optional compat integrations isolated under `compat`.
+- Keep `gradle.properties` metadata aligned with resource expansion values.
+- Do not hardcode release version strings in source; version comes from git.
 
-## Dependencies
-- Do not add new dependencies without clear need.
-- Keep compatibility code isolated under `compat`.
-
-## Tests
-- No test sources found under `src/test`.
-- No test dependencies are declared in `build.gradle.kts`.
-- Tests, when added, run via the `test` task.
+## Current Test Suite Status
+- No `src/test` sources are currently present.
+- Test tasks exist and are runnable through Gradle.
+- When adding tests, make them runnable by class and by method via `--tests`.
 
 ## Cursor/Copilot Rules
-- No `.cursor/rules`, `.cursorrules`, or `.github/copilot-instructions.md` found.
+- `.cursor/rules/`: not found.
+- `.cursorrules`: not found.
+- `.github/copilot-instructions.md`: not found.
 
-## Repo-specific Patterns
-- `ItemConverter` object acts as the mod entrypoint and ID source.
-- Use `object` for singletons (`ItemConverter`, `Networking`).
-- Use `data class` for simple value carriers (`ConversionTarget`).
-- Use `companion object` for config state and reload helpers.
-- Use `internal` for module-scoped values (e.g., `json`).
-
-## Kotlin Style Extras
-- Prefer expression bodies when a function is a single expression.
-- Use `when` for keycode mappings and enums.
-- Avoid unnecessary temporary variables.
-- Keep line lengths reasonable; wrap long calls.
-
-## File IO
-- Use `kotlin.io.path` utilities (`createFile`, `inputStream`, `outputStream`).
-- Ensure config files exist before decode.
-- Write minimal JSON (`{}`) when creating new config files.
-
-## Defensive Defaults
-- Validate external inputs (recipe types, tag lists).
-- Guard against empty `ItemStack` values.
-- Return empty collections instead of null.
-
-## Gradle Properties
-- Use `gradle.properties` for mod metadata.
-- Keep `archive_name`, `id`, `name`, `description`, `source` in sync.
-
-## Versioning
-- Mod version is derived from git via `com.palantir.git-version`.
-- Avoid hardcoding version strings in code.
-
-## Serialization Compatibility
-- Leave `ignoreUnknownKeys = true` enabled.
-- Add new fields with defaults to preserve config compatibility.
+## Agent Execution Notes
+- Read the target file/function before editing.
+- Match existing package structure and feature boundaries.
+- Keep changes local and direct; avoid unnecessary abstraction.
+- Preserve packet IDs, config keys, and translation keys unless intentionally changing behavior.
+- Prefer defensive checks around external/game-state inputs.
