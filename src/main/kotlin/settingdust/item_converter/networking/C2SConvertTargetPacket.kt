@@ -47,6 +47,7 @@ object C2SConvertTargetPacket {
             // Check if target already exists in inventory - vanilla pick block behavior
             val existingSlot = player.inventory.findSlotMatchingItem(target)
             if (existingSlot != -1) {
+                val selectedSlot = player.inventory.selected
                 // Item exists in inventory - just switch to it, no conversion
                 if (existingSlot in 0..8) {
                     // Already in hotbar, just select it
@@ -54,11 +55,13 @@ object C2SConvertTargetPacket {
                     player.connection.send(
                         net.minecraft.network.protocol.game.ClientboundSetCarriedItemPacket(player.inventory.selected)
                     )
-                } else {
+                } else if (existingSlot in player.inventory.items.indices && selectedSlot in player.inventory.items.indices) {
                     // Swap with current hotbar slot
-                    val existingItem = player.inventory.getItem(existingSlot)
-                    player.inventory.setItem(existingSlot, selected)
-                    player.inventory.setItem(player.inventory.selected, existingItem)
+                    val existingItem = player.inventory.getItem(existingSlot).copy()
+                    val selectedItem = player.inventory.getItem(selectedSlot).copy()
+                    player.inventory.setItem(selectedSlot, existingItem)
+                    player.inventory.setItem(existingSlot, selectedItem)
+                    player.containerMenu.broadcastChanges()
                 }
                 return@enqueueWork
             }
@@ -78,13 +81,18 @@ object C2SConvertTargetPacket {
 
                 for ((slot, outputPerInput) in candidates) {
                     if (remaining <= 0) break
+                    if (outputPerInput <= 0) continue
+
                     val sourceItem = player.inventory.getItem(slot)
                     val available = sourceItem.count
                     val canConvert = min(available, remaining / outputPerInput)
                     if (canConvert > 0) {
-                        player.inventory.removeItem(slot, canConvert)
-                        result.count += canConvert * outputPerInput
-                        remaining -= canConvert * outputPerInput
+                        val removed = player.inventory.removeItem(slot, canConvert)
+                        if (!removed.isEmpty) {
+                            val convertedInput = removed.count
+                            result.count += convertedInput * outputPerInput
+                            remaining -= convertedInput * outputPerInput
+                        }
                     }
                 }
 
@@ -94,8 +102,12 @@ object C2SConvertTargetPacket {
             } else {
                 // Convert single item from first candidate
                 val (slot, outputPerInput) = candidates.first()
-                player.inventory.removeItem(slot, 1)
-                val result = target.copy().apply { count = outputPerInput }
+                if (outputPerInput <= 0) return@enqueueWork
+
+                val removed = player.inventory.removeItem(slot, 1)
+                if (removed.isEmpty) return@enqueueWork
+
+                val result = target.copy().apply { count = removed.count * outputPerInput }
                 giveResult(result, player)
             }
         }
@@ -128,7 +140,7 @@ object C2SConvertTargetPacket {
                 ItemStack.isSameItemSameTags(it.output.copyWithCount(1), target.copyWithCount(1))
             }
 
-            if (matchingConversion != null) {
+            if (matchingConversion != null && matchingConversion.output.count > 0) {
                 // Slot priority: lower is better. Hotbar (0-8) gets higher number = lower priority
                 val slotPriority = if (slot < 9) slot + 36 else slot
                 candidates.add(Candidate(slot, matchingConversion.output.count, matchingConversion.isSpecial, slotPriority))
@@ -150,7 +162,15 @@ object C2SConvertTargetPacket {
 
     /** Give converted result to player, preferring hotbar slot */
     private fun giveResult(result: ItemStack, player: ServerPlayer) {
-        if (!player.inventory.add(player.inventory.selected, result)) {
+        val selectedSlot = player.inventory.selected
+        val selectedStack = player.inventory.getItem(selectedSlot)
+        val canMergeIntoSelected = selectedStack.isEmpty || ItemStack.isSameItemSameTags(selectedStack, result)
+
+        if (canMergeIntoSelected && !player.inventory.add(selectedSlot, result)) {
+            if (!player.inventory.add(result)) {
+                player.drop(result, true)
+            }
+        } else if (!canMergeIntoSelected) {
             if (!player.inventory.add(result)) {
                 player.drop(result, true)
             }
