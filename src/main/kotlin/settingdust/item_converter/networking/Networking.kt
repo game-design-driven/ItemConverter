@@ -1,6 +1,7 @@
 package settingdust.item_converter.networking
 
 import net.minecraft.nbt.NbtOps
+import net.minecraftforge.fml.ModList
 import net.minecraftforge.network.NetworkRegistry
 import settingdust.item_converter.ItemConverter
 
@@ -18,13 +19,15 @@ object Networking {
             { it.readWithCodec(NbtOps.INSTANCE, C2SConvertItemPacket.CODEC) },
             { packet, context -> C2SConvertItemPacket.handle(packet, context) }
         )
-        channel.registerMessage(
-            1,
-            C2SConvertMEItemPacket::class.java,
-            { message, buf -> buf.writeWithCodec(NbtOps.INSTANCE, C2SConvertMEItemPacket.CODEC, message) },
-            { it.readWithCodec(NbtOps.INSTANCE, C2SConvertMEItemPacket.CODEC) },
-            { packet, context -> C2SConvertMEItemPacket.handle(packet, context) }
-        )
+        if (ModList.get().isLoaded("ae2")) {
+            channel.registerMessage(
+                1,
+                C2SConvertMEItemPacket::class.java,
+                { message, buf -> buf.writeWithCodec(NbtOps.INSTANCE, C2SConvertMEItemPacket.CODEC, message) },
+                { it.readWithCodec(NbtOps.INSTANCE, C2SConvertMEItemPacket.CODEC) },
+                { packet, context -> C2SConvertMEItemPacket.handle(packet, context) }
+            )
+        }
         // Empty packet - just signals middle-click, server does all the work
         channel.registerMessage(
             2,

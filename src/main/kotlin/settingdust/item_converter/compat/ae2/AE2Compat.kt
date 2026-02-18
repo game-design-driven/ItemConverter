@@ -1,94 +1,38 @@
 package settingdust.item_converter.compat.ae2
 
-import appeng.client.gui.me.common.MEStorageScreen
-import appeng.client.gui.me.common.RepoSlot
-import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.screens.Screen
 import net.minecraft.world.inventory.Slot
 import net.minecraftforge.api.distmarker.Dist
 import net.minecraftforge.api.distmarker.OnlyIn
-import net.minecraftforge.client.event.ScreenEvent
 import net.minecraftforge.fml.ModList
-import settingdust.item_converter.ClientConfig
 import settingdust.item_converter.ItemConverter
-import settingdust.item_converter.RecipeHelper
-import settingdust.item_converter.client.SlotInteractManager
-import thedarkcolour.kotlinforforge.forge.FORGE_BUS
 
 @OnlyIn(Dist.CLIENT)
 object AE2Compat {
-    private var lastOpenTime = 0L
-    private const val OPEN_COOLDOWN_MS = 100L
+    private const val IMPLEMENTATION_CLASS = "settingdust.item_converter.compat.ae2.AE2CompatImpl"
 
-    val isLoaded by lazy { ModList.get().isLoaded("ae2") }
+    private val implementation: AE2CompatClient? by lazy {
+        if (!ModList.get().isLoaded("ae2")) return@lazy null
+
+        runCatching {
+            Class.forName(IMPLEMENTATION_CLASS)
+                .getField("INSTANCE")
+                .get(null) as AE2CompatClient
+        }.onFailure {
+            ItemConverter.LOGGER.error("Failed to load AE2 compatibility implementation", it)
+        }.getOrNull()
+    }
 
     fun init() {
-        if (!isLoaded) return
-
-        ItemConverter.LOGGER.info("AE2 detected, enabling ME terminal support")
-
-        FORGE_BUS.addListener { event: ScreenEvent.Render.Post ->
-            handleMEScreen(event)
-        }
+        implementation?.init()
     }
 
-    private fun handleMEScreen(event: ScreenEvent.Render.Post) {
-        val screen = event.screen
-        if (!isMETerminalScreen(screen)) return
-
-        val meScreen = screen as MEStorageScreen<*>
-        val pressedTicks = SlotInteractManager.pressedTicks
-
-        if (pressedTicks > ClientConfig.config.pressTicks && !SlotInteractManager.converting) {
-            val now = System.currentTimeMillis()
-            if (now - lastOpenTime < OPEN_COOLDOWN_MS) return
-            lastOpenTime = now
-
-            val hoveredSlot = meScreen.slotUnderMouse ?: return
-            // Only handle RepoSlots (ME network items), not player inventory slots
-            if (hoveredSlot !is RepoSlot) return
-
-            val item = hoveredSlot.item
-            if (item.isEmpty) return
-
-            val recipeManager = RecipeHelper.getRecipeManager() ?: return
-            if (!RecipeHelper.hasConversions(recipeManager, item)) return
-
-            val slotScreenX = meScreen.guiLeft + hoveredSlot.x
-            val slotScreenY = meScreen.guiTop + hoveredSlot.y
-
-            Minecraft.getInstance().pushGuiLayer(
-                MEItemConvertScreen(
-                    meScreen,
-                    hoveredSlot,
-                    item.copy(),
-                    slotScreenX,
-                    slotScreenY
-                )
-            )
-            SlotInteractManager.converting = true
-        }
-    }
-
-    fun isMETerminalScreen(screen: Screen?): Boolean {
-        if (!isLoaded) return false
-        return isMETerminalScreenInternal(screen)
-    }
-
-    private fun isMETerminalScreenInternal(screen: Screen?): Boolean {
-        return screen is MEStorageScreen<*>
-    }
-
-    /**
-     * Check if slot is a RepoSlot (ME network virtual slot).
-     * Returns false if AE2 isn't loaded or slot is a regular inventory slot.
-     */
     fun isRepoSlot(slot: Slot?): Boolean {
-        if (!isLoaded) return false
-        return isRepoSlotInternal(slot)
+        return implementation?.isRepoSlot(slot) ?: false
     }
+}
 
-    private fun isRepoSlotInternal(slot: Slot?): Boolean {
-        return slot is RepoSlot
-    }
+interface AE2CompatClient {
+    fun init()
+
+    fun isRepoSlot(slot: Slot?): Boolean
 }
