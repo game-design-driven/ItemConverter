@@ -11,9 +11,11 @@ import net.minecraftforge.api.distmarker.OnlyIn
 import net.minecraftforge.client.event.ScreenEvent
 import net.minecraftforge.common.MinecraftForge
 import settingdust.item_converter.ClientConfig
+import settingdust.item_converter.ConversionBehavior
 import settingdust.item_converter.DrawableNineSliceTexture
 import settingdust.item_converter.ItemConverter
 import settingdust.item_converter.RecipeHelper
+import settingdust.item_converter.toConversionRequest
 import settingdust.item_converter.client.ItemButton
 import settingdust.item_converter.client.SlotInteractManager
 import settingdust.item_converter.networking.C2SConvertMEItemPacket
@@ -120,6 +122,12 @@ class MEItemConvertScreen(
         return itemButtons.firstOrNull { it.isMouseOver(mouseX, mouseY) }
     }
 
+    private fun performBehavior(target: ItemStack, behavior: ConversionBehavior): Boolean {
+        val request = behavior.toConversionRequest() ?: return false
+        performConversion(target, request.count, request.action)
+        return true
+    }
+
     private fun performConversion(target: ItemStack, count: Int, action: ConvertAction) {
         Networking.channel.sendToServer(
             C2SConvertMEItemPacket(inputItem.copyWithCount(1), target.copy(), count, action)
@@ -127,10 +135,12 @@ class MEItemConvertScreen(
     }
 
     override fun render(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
+        val popupConfig = ClientConfig.config.popup
+
         // Key released - convert all to hovered item (REPLACE action)
         if (!SlotInteractManager.converting) {
             getHoveredButton(mouseX.toDouble(), mouseY.toDouble())?.let { button ->
-                performConversion(button.item, -1, ConvertAction.REPLACE)
+                performBehavior(button.item, popupConfig.keyReleaseBehavior)
             }
             onClose()
             return
@@ -149,17 +159,15 @@ class MEItemConvertScreen(
         val hoveredButton = getHoveredButton(mouseX, mouseY) ?: return super.mouseClicked(mouseX, mouseY, button)
         val target = hoveredButton.item
         val isShift = hasShiftDown()
+        val popupConfig = ClientConfig.config.popup
 
-        when (button) {
-            0 -> { // Left click - TO_INVENTORY
-                val count = if (isShift) -1 else 1
-                performConversion(target, count, ConvertAction.TO_INVENTORY)
-            }
-            1 -> { // Right click - DROP
-                val count = if (isShift) -1 else 1
-                performConversion(target, count, ConvertAction.DROP)
-            }
+        val behavior = when (button) {
+            0 -> if (isShift) popupConfig.leftClickShiftBehavior else popupConfig.leftClickBehavior
+            1 -> if (isShift) popupConfig.rightClickShiftBehavior else popupConfig.rightClickBehavior
+            else -> return super.mouseClicked(mouseX, mouseY, button)
         }
+
+        performBehavior(target, behavior)
         return true
     }
 

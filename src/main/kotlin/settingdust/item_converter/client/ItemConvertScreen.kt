@@ -14,12 +14,16 @@ import net.minecraftforge.api.distmarker.OnlyIn
 import net.minecraftforge.client.event.ScreenEvent
 import net.minecraftforge.common.MinecraftForge
 import settingdust.item_converter.ClientConfig
+import settingdust.item_converter.ConversionBehavior
 import settingdust.item_converter.DrawableNineSliceTexture
 import settingdust.item_converter.ItemConverter
 import settingdust.item_converter.RecipeHelper
+import settingdust.item_converter.toConversionRequest
+import settingdust.item_converter.networking.BULK_COUNT
 import settingdust.item_converter.networking.C2SConvertItemPacket
 import settingdust.item_converter.networking.ConvertAction
 import settingdust.item_converter.networking.Networking
+import settingdust.item_converter.networking.resolveBulkInputCountForSingleOutputStack
 
 @OnlyIn(Dist.CLIENT)
 data class ItemConvertScreen(
@@ -39,8 +43,6 @@ data class ItemConvertScreen(
         private const val BORDER = 6
 
         private const val SLOT_SIZE = 18
-
-        private const val SELECTION_DELAY_MS = 100L
 
         val texture = DrawableNineSliceTexture(
             TEXTURE,
@@ -140,14 +142,28 @@ data class ItemConvertScreen(
         return itemButtons.firstOrNull { it.isMouseOver(mouseX, mouseY) }
     }
 
+    private fun performBehavior(target: ItemStack, behavior: ConversionBehavior): Boolean {
+        val request = behavior.toConversionRequest() ?: return false
+        performConversion(target, request.count, request.action)
+        return true
+    }
+
     private fun performConversion(target: ItemStack, count: Int, action: ConvertAction) {
         if (parent is CreativeModeInventoryScreen) {
             // Creative mode - client-side only, give items directly
             val player = minecraft!!.player!!
-            val outputPerInput = target.count
-            val inputCount = if (count == -1) input.count else count
+            val outputPerInput = target.count.coerceAtLeast(1)
+            val inputCount = if (count == BULK_COUNT) {
+                resolveBulkInputCountForSingleOutputStack(input.count, outputPerInput, target.maxStackSize)
+            } else {
+                minOf(count, input.count)
+            }
+            if (inputCount <= 0) return
+
             val result = target.copy()
             result.count = inputCount * outputPerInput
+            if (result.count <= 0) return
+
             player.inventory.add(result)
             for ((i, invSlot) in player.inventoryMenu.slots.withIndex()) {
                 if (!ItemStack.isSameItemSameTags(invSlot.item, target)) continue
@@ -161,11 +177,13 @@ data class ItemConvertScreen(
     }
 
     override fun render(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
+        val popupConfig = ClientConfig.config.popup
+
         // Check if number key selection delay has passed
         if (selectedIndex >= 0 && selectedIndex < itemButtons.size) {
-            if (System.currentTimeMillis() - selectionTime >= SELECTION_DELAY_MS) {
+            if (System.currentTimeMillis() - selectionTime >= popupConfig.numberKeyApplyDelayMsClamped()) {
                 val button = itemButtons[selectedIndex]
-                performConversion(button.item, -1, ConvertAction.REPLACE)
+                performBehavior(button.item, popupConfig.numberKeyBehavior)
                 onClose()
                 return
             }
@@ -174,7 +192,7 @@ data class ItemConvertScreen(
         // Key released - convert all to hovered item (REPLACE action)
         if (!SlotInteractManager.converting) {
             getHoveredButton(mouseX.toDouble(), mouseY.toDouble())?.let { button ->
-                performConversion(button.item, -1, ConvertAction.REPLACE)
+                performBehavior(button.item, popupConfig.keyReleaseBehavior)
             }
             onClose()
             return
@@ -206,6 +224,10 @@ data class ItemConvertScreen(
     }
 
     override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
+        if (ClientConfig.config.popup.numberKeyBehavior == ConversionBehavior.DISABLED) {
+            return super.keyPressed(keyCode, scanCode, modifiers)
+        }
+
         // Check for number keys 1-9
         val numberIndex = when (keyCode) {
             InputConstants.KEY_1 -> 0
@@ -233,17 +255,15 @@ data class ItemConvertScreen(
         val hoveredButton = getHoveredButton(mouseX, mouseY) ?: return super.mouseClicked(mouseX, mouseY, button)
         val target = hoveredButton.item
         val isShift = hasShiftDown()
+        val popupConfig = ClientConfig.config.popup
 
-        when (button) {
-            0 -> { // Left click - TO_INVENTORY
-                val count = if (isShift) -1 else 1
-                performConversion(target, count, ConvertAction.TO_INVENTORY)
-            }
-            1 -> { // Right click - DROP
-                val count = if (isShift) -1 else 1
-                performConversion(target, count, ConvertAction.DROP)
-            }
+        val behavior = when (button) {
+            0 -> if (isShift) popupConfig.leftClickShiftBehavior else popupConfig.leftClickBehavior
+            1 -> if (isShift) popupConfig.rightClickShiftBehavior else popupConfig.rightClickBehavior
+            else -> return super.mouseClicked(mouseX, mouseY, button)
         }
+
+        performBehavior(target, behavior)
         return true
     }
 
@@ -263,7 +283,7 @@ data class ItemConvertScreen(
     }
 
     override fun mouseScrolled(mouseX: Double, mouseY: Double, delta: Double): Boolean {
-        if (!ClientConfig.config.allowScroll) return false
+        if (!ClientConfig.config.allowScroll || !ClientConfig.config.popup.allowScrollHotbarCycle) return false
 
         // When opened from hotbar (no parent), allow scrolling to change hotbar selection
         if (parent == null) {
