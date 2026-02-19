@@ -50,6 +50,9 @@ object C2SConvertTargetPacket {
         }) {
 
             val selected = player.inventory.getItem(player.inventory.selected)
+            if (ItemStack.isSameItemSameTags(target, selected)) {
+                return@launch
+            }
             val paths = player.inventory.items.asSequence()
                 .mapIndexed { slot, it -> slot to it }
                 .filter { (_, it) -> !ItemStack.isSameItemSameTags(it, target) }
@@ -154,22 +157,25 @@ object C2SConvertTargetPacket {
                     val existIndex = player.inventory.findSlotMatchingItem(target)
                     if (existIndex in 0..8) {
                         player.inventory.selected = existIndex
-                        player.connection.send(ClientboundSetCarriedItemPacket(player.inventory.selected));
+                        player.connection.send(ClientboundSetCarriedItemPacket(player.inventory.selected))
                     } else if (existIndex != -1) {
-                        player.inventory.setItem(player.inventory.selected, player.inventory.getItem(existIndex))
-                        player.inventory.setItem(existIndex, selected)
+                        val selectedIndex = player.inventory.selected
+                        val existingItem = player.inventory.getItem(existIndex).copy()
+                        val selectedItem = player.inventory.getItem(selectedIndex).copy()
+                        player.inventory.setItem(selectedIndex, existingItem)
+                        player.inventory.setItem(existIndex, selectedItem)
+                        player.containerMenu.broadcastChanges()
                     } else {
                         removeMaterials()
                         val selectedIndex = player.inventory.selected
                         val selectedStack = player.inventory.getItem(selectedIndex)
-                        if (!selectedStack.isEmpty && !ItemStack.isSameItemSameTags(selectedStack, itemToInsert)) {
-                            val selectedCopy = selectedStack.copy()
-                            player.inventory.setItem(selectedIndex, ItemStack.EMPTY)
-                            if (!player.inventory.add(selectedCopy)) {
-                                player.drop(selectedCopy, true)
+
+                        val canMergeIntoSelected = selectedStack.isEmpty || ItemStack.isSameItemSameTags(selectedStack, itemToInsert)
+                        if (canMergeIntoSelected && !player.inventory.add(selectedIndex, itemToInsert)) {
+                            if (!player.inventory.add(itemToInsert)) {
+                                player.drop(itemToInsert, true)
                             }
-                        }
-                        if (!player.inventory.add(selectedIndex, itemToInsert)) {
+                        } else if (!canMergeIntoSelected) {
                             if (!player.inventory.add(itemToInsert)) {
                                 player.drop(itemToInsert, true)
                             }

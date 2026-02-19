@@ -19,7 +19,7 @@ dependencyResolutionManagement.versionCatalogs.create("catalog") {
     val minecraft = "1.19.2"
     version("minecraft", minecraft)
 
-    val kotlin = "1.8.21"
+    val kotlin = "2.0.0"
     version("kotlin", kotlin)
     plugin("kotlin-jvm", "org.jetbrains.kotlin.jvm").version(kotlin)
     plugin("kotlin-plugin-serialization", "org.jetbrains.kotlin.plugin.serialization").version(kotlin)
